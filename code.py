@@ -60,15 +60,65 @@ def get_chord_name(chord):
     return "Unknown"
 
 def handle_joystick(x_value, y_value):
-    global current_chord, last_joystick_move_time
+    global current_chord
+    global last_joystick_move_time
+    
     current_time = time.monotonic()
     if current_time - last_joystick_move_time < grace_period:
-        return
+        return  # Skip processing if within the grace period
+
     if current_chord is None:
-        return
+        return  # No chord to alter
+
     root_note = current_chord[0]
     current_chord_name = get_chord_name(current_chord)
-    # ... joystick logic as before ...
+    if "Min" in current_chord_name:
+        if y_value > 100:  # UP: Switch to Min7
+            stop_chord(current_chord)
+            current_chord = generate_chord(root_note, "min7")
+            play_chord(current_chord)
+            print("Changed to Min7 chord")
+            last_joystick_move_time = current_time
+        elif y_value < 27:  # DOWN: Switch to Maj
+            stop_chord(current_chord)
+            current_chord = generate_chord(root_note, "major")
+            play_chord(current_chord)
+            print("Changed to Maj chord")
+            last_joystick_move_time = current_time
+    elif "Maj" in current_chord_name:
+        if y_value > 100:  # UP: Switch to Maj7
+            stop_chord(current_chord)
+            current_chord = generate_chord(root_note, "maj7")
+            play_chord(current_chord)
+            print("Changed to Maj7 chord")
+            last_joystick_move_time = current_time
+        elif y_value < 27:  # DOWN: Switch to Min
+            stop_chord(current_chord)
+            current_chord = generate_chord(root_note, "minor")
+            play_chord(current_chord)
+            print("Changed to Min chord")
+            last_joystick_move_time = current_time
+    elif "min7" in current_chord_name or "maj7" in current_chord_name:
+        if y_value < 27:  # DOWN: Switch to root chord
+            stop_chord(current_chord)
+            current_chord = generate_chord(root_note, "minor" if "min7" in current_chord_name else "major")
+            play_chord(current_chord)
+            print("Changed to root chord")
+            last_joystick_move_time = current_time
+            
+    if x_value < 27:  # LEFT: Change chord to sus2
+        stop_chord(current_chord)
+        current_chord = generate_chord(root_note, "sus2")
+        play_chord(current_chord)
+        print("Changed to sus2 chord")
+        last_joystick_move_time = current_time
+    elif x_value > 100:  # RIGHT: Change chord to sus4
+        stop_chord(current_chord)
+        current_chord = generate_chord(root_note, "sus4")
+        play_chord(current_chord)
+        print("Changed to sus4 chord")
+        last_joystick_move_time = current_time
+
 
 def handle_function_keys(key):
     global root_note_index, current_scale_type
