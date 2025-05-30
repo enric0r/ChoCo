@@ -106,8 +106,12 @@ chord_names = {
     (0, 3, 6): "Dim",
     (0, 5, 7): "Sus4",
     (0, 2, 7): "Sus2",
+    (0, 4, 7, 9): "Maj6",
     (0, 4, 7, 11): "Maj7",
     (0, 3, 7, 10): "Min7",
+    (0, 4, 7, 11, 14): "Maj9",   
+    (0, 3, 7, 10, 14): "Min9",
+    (0, 4, 7, 10): "Dom7"
 }
 
 # Track the currently selected root note and scale type
@@ -121,8 +125,17 @@ current_chord = None
 grace_period = 0.3
 last_joystick_move_time = 0
 
+chord_inversions = {k: 0 for k in range(7)}  # 7 chord keys, default to root position
+
 def get_analog_value(pin):
     return int((pin.value / 65535) * 127)
+
+def invert_chord(chord, inversion):
+    """Return the chord in the given inversion (0=root, 1=1st, ...)."""
+    chord = chord[:]  # Copy to avoid mutating original
+    for _ in range(inversion):
+        chord.append(chord.pop(0) + 12)
+    return chord
 
 # Function to play a chord
 def play_chord(chord):
@@ -163,6 +176,21 @@ def get_chord_name(chord):
         if intervals == key:
             return name
     return "Unknown"
+
+def handle_inversion_assignment():
+    print("Inversion assignment mode: Press a chord key to cycle its inversion.")
+    while True:
+        event = keys.events.get()
+        if event:
+            mapped_key = key_map[event.key_number]
+            if event.pressed and mapped_key is not None and mapped_key < 7:
+                # Cycle inversion for this chord key
+                chord_inversions[mapped_key] = (chord_inversions[mapped_key] + 1) % 4
+                print(f"Chord key {mapped_key} inversion set to {chord_inversions[mapped_key]}")
+            # Exit mode when function key released
+            elif event.released and mapped_key == 10:
+                break
+        time.sleep(0.05)
 
 def handle_joystick(x_value, y_value):
     global current_chord
@@ -243,15 +271,19 @@ def generate_chord(root_note, chord_type):
 
 def handle_function_keys(key):
     global root_note_index, current_scale_type
-    if key == 10:  # Function key to change root note
-        root_note_index = (root_note_index + 1) % 12
-        print(f"Root note changed to {root_note_index}")
-    elif key == 11:  # Function key to change scale type
+    if key == 10:  # Function key to change root note or assign inversion
+        # Check if function key is held
+        if joystick_button.value == 0:  # Button pressed (active low)
+            handle_inversion_assignment()
+        else:
+            root_note_index = (root_note_index + 1) % 12
+            print(f"Root note changed to {root_note_index}")
+    elif key == 11:
         scale_types = list(scale_offsets.keys())
         current_scale_index = scale_types.index(current_scale_type)
         current_scale_type = scale_types[(current_scale_index + 1) % len(scale_types)]
         print(f"Scale type changed to {current_scale_type}")
-    elif key == 12:  # Additional function key for other settings
+    elif key == 12:
         supervisor.reload()
 
 def get_chord_type_for_scale(scale_type, degree):
@@ -286,9 +318,11 @@ while True:
                 else:  # Chord keys
                     scale_notes = map_notes_to_scale(root_note_index, current_scale_type)
                     root_note = scale_notes[mapped_key]
-                    
                     chord_type = get_chord_type_for_scale(current_scale_type, mapped_key)
                     chord = generate_chord(root_note, chord_type)
+                    # Apply inversion if set
+                    inversion = chord_inversions.get(mapped_key, 0)
+                    chord = invert_chord(chord, inversion)
                     
                     if chord:
                         if current_chord is not None:
