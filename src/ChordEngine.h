@@ -1,0 +1,40 @@
+#ifndef CHORD_ENGINE_H
+#define CHORD_ENGINE_H
+
+#include <Arduino.h>
+#include "Config.h"
+#include "MIDI.h"
+
+struct Chord {
+  int notes[5];
+  int size;
+  String name;
+};
+
+void playChordForDegree(int degree);
+void playChord(int root, const int* intervals, int size, String name);
+void stopCurrentChord();
+String getCurrentChordName();
+int getCurrentRootNote();
+void setCurrentRootNote(int rootNote);
+bool isMinorScale();
+void setMinorScale(bool isMinor);
+void setCurrentInversion(int inversion);
+int getCurrentInversion();
+// True if a chord is currently sounding (notes are on)
+bool isChordActive();
+
+extern const int CHORD_MAJ[];
+extern const int CHORD_MIN[];
+extern const int CHORD_DIM[];
+extern const int CHORD_AUG[];
+extern const int CHORD_SUS4[];
+extern const int CHORD_MAJ7[];
+extern const int CHORD_MIN7[];
+extern const int CHORD_SUS2[];
+extern const int CHORD_DOM7[];
+extern const int CHORD_DOM9[];
+extern const int CHORD_DOM11[];
+extern const int CHORD_MIN9[];
+
+#endif
