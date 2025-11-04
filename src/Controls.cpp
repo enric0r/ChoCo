@@ -343,12 +343,13 @@ void handleJoystick(int x, int y) {
   // Check if C modifier is held for octave change mode
   bool cHeld = isModifierCHeld();
   
+  // Track octave change state
+  static int lastOctaveDx = 0;
+  static unsigned long lastOctaveChangeTime = 0;
+  
   // If C is held and joystick moved left/right, change octave
   if (cHeld && dx != 0 && dy == 0) {
     // Only change on direction change to avoid repeats
-    static int lastOctaveDx = 0;
-    static unsigned long lastOctaveChangeTime = 0;
-    
     if (dx != lastOctaveDx && (millis() - lastOctaveChangeTime >= JOYSTICK_GRACE_PERIOD)) {
       if (dx < 0) {
         decrementOctave();
@@ -366,7 +367,6 @@ void handleJoystick(int x, int y) {
     }
   } else {
     // Reset octave change tracking when C is not held or joystick is not left/right
-    static int lastOctaveDx = 0;
     lastOctaveDx = 0;
   }
 
