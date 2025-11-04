@@ -161,16 +161,16 @@ void handleKeyPress(char key) {
   else if (key == 'A') {
     int newRoot = (getCurrentRootNote() + 1);
     setCurrentRootNote(newRoot);
-    showStatus(String("Root: ") + getNoteName(getCurrentRootNote()));
+    showStatus(String("Root: ") + getNoteName(getCurrentRootNote()), 300); // shorter, non-blocking
   }
   else if (key == 'B') {
     setMinorScale(!isMinorScale());
-    showStatus(String("Scale: ") + (isMinorScale() ? "Minor" : "Major"));
+    showStatus(String("Scale: ") + (isMinorScale() ? "Minor" : "Major"), 300);
   }
   else if (key == 'C') {
     int inv = (getCurrentInversion() + 1) % 3; // cycle 0..2
     setCurrentInversion(inv);
-    showStatus(String("Inversion: ") + inv);
+    showStatus(String("Inversion: ") + inv, 300);
   }
 }
 
@@ -192,7 +192,7 @@ static void applyChordVariation(int dx, int dy) {
     return;
   }
 
-  const int root = getCurrentRootNote();
+  const int root = getActiveChordRoot();
   const int *intervals = nullptr;
   int size = 0;
   String name = "";

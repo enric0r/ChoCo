@@ -8,6 +8,7 @@
 struct Chord {
   int notes[5];
   int size;
+  int root; // MIDI note of the chord root used when the chord was started (pre-inversion)
   String name;
 };
 
@@ -23,6 +24,7 @@ void setCurrentInversion(int inversion);
 int getCurrentInversion();
 // True if a chord is currently sounding (notes are on)
 bool isChordActive();
+int getActiveChordRoot();
 
 extern const int CHORD_MAJ[];
 extern const int CHORD_MIN[];

@@ -1,3 +1,11 @@
+// Standalone I2C/OLED smoke test.
+// Disabled by default to avoid multiple definitions of setup()/loop() with main.cpp.
+// Define ENABLE_I2C_STANDALONE in build flags to compile this instead of main.
+#ifndef ENABLE_I2C_STANDALONE
+
+// Intentionally empty when not enabled.
+
+#else
 #include <Arduino.h>
 #include "Wire.h"
 #include <Adafruit_SSD1306.h>
@@ -55,3 +63,4 @@ void setup(){
 void loop(){
 
 }
+#endif // ENABLE_I2C_STANDALONE

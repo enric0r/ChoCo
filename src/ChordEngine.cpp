@@ -13,7 +13,7 @@ const uint16_t TRIAD_AUG = BIT(0) | BIT(4) | BIT(8); // 1-3-#5
 const uint16_t TRIAD_SUS2 = BIT(0) | BIT(2) | BIT(7); // 1-2-5
 const uint16_t TRIAD_SUS4 = BIT(0) | BIT(5) | BIT(7); // 1-4-5
 
-static Chord currentChord = {{0}, 0, ""};
+static Chord currentChord = {{0}, 0, 0, ""};
 static int rootNote = BASE_NOTE;
 static bool minorScale = false;
 static int currentInversion = 0;
@@ -65,6 +65,7 @@ void playChord(int root, const int* intervals, int size, String name) {
   }
   
   currentChord.size = size;
+  currentChord.root = root; // track the active chord's actual root
   currentChord.name = name;
   if (currentInversion > 0) {
     currentChord.name += String(" ") + currentInversion + "inv";
@@ -151,4 +152,9 @@ int getCurrentInversion() {
 
 bool isChordActive() {
   return currentChord.size > 0;
+}
+
+int getActiveChordRoot() {
+  if (currentChord.size > 0) return currentChord.root;
+  return getCurrentRootNote();
 }

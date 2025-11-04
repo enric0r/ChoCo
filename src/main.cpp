@@ -60,5 +60,9 @@ void loop() {
         }
     }
 
-    updateDisplay();
+    static unsigned long lastUi = 0;
+    if (millis() - lastUi >= 100) {
+        updateDisplay();
+        lastUi = millis();
+    }
 }
