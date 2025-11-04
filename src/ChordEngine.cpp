@@ -172,6 +172,77 @@ void playChordForDegree(int degree) {
   }
 }
 
+// Variant: play a specific degree but with custom chord intervals (e.g., Maj7/Sus)
+void playChordForDegreeWithIntervals(int degree, const int* forcedIntervals, int forcedSize, const char* forcedName) {
+  stopCurrentChord();
+
+  // Resolve current scale intervals
+  auto getIntervals = [](ScaleType t) -> const uint8_t* {
+    switch (t) {
+      case SCALE_IONIAN:         return IONIAN_INTERVALS;
+      case SCALE_DORIAN:         return DORIAN_INTERVALS;
+      case SCALE_PHRYGIAN:       return PHRYGIAN_INTERVALS;
+      case SCALE_LYDIAN:         return LYDIAN_INTERVALS;
+      case SCALE_MIXOLYDIAN:     return MIXOLYDIAN_INTERVALS;
+      case SCALE_AEOLIAN:        return AEOLIAN_INTERVALS;
+      case SCALE_LOCRIAN:        return LOCRIAN_INTERVALS;
+      case SCALE_HARMONIC_MINOR: return HARM_MIN_INTERVALS;
+      case SCALE_MELODIC_MINOR:  return MELO_MIN_INTERVALS;
+      default:                   return IONIAN_INTERVALS;
+    }
+  };
+
+  const uint8_t* scale = getIntervals(currentScale);
+  int root = rootNote + scale[degree];
+
+  // Determine inversion to use
+  int inversionToUse = chordInversions[degree];
+
+  // Auto-voicing support using the provided intervals
+  if (autoVoicingMode) {
+    int bestInversion = 0;
+    int bestOctave = 0;
+    int bestScore = -10000;
+    for (int octaveShift = -1; octaveShift <= 1; octaveShift++) {
+      int testRoot = root + (octaveShift * 12);
+      for (int testInv = 0; testInv < 3; testInv++) {
+        int lowestNote = 127, highestNote = 0;
+        for (int i = 0; i < forcedSize; i++) {
+          int n = testRoot + forcedIntervals[i];
+          if (i < testInv) n += 12;
+          if (n < lowestNote) lowestNote = n;
+          if (n > highestNote) highestNote = n;
+        }
+        int score = 0;
+        bool inRange = (lowestNote >= AUTO_VOICING_MIN_NOTE && highestNote <= AUTO_VOICING_MAX_NOTE);
+        if (inRange) score += 10000; else {
+          if (lowestNote < AUTO_VOICING_MIN_NOTE) score -= (AUTO_VOICING_MIN_NOTE - lowestNote) * 100;
+          if (highestNote > AUTO_VOICING_MAX_NOTE) score -= (highestNote - AUTO_VOICING_MAX_NOTE) * 100;
+        }
+        int distance = abs(lowestNote - lastPlayedNote);
+        score -= distance;
+        if (score > bestScore) { bestScore = score; bestInversion = testInv; bestOctave = octaveShift; }
+      }
+    }
+    root = root + (bestOctave * 12);
+    inversionToUse = bestInversion;
+    currentInversion = inversionToUse;
+    Serial.print("Auto-voicing (forced): degree="); Serial.print(degree);
+    Serial.print(" root="); Serial.print(root);
+    Serial.print(" octave="); Serial.print(bestOctave);
+    Serial.print(" inversion="); Serial.println(bestInversion);
+  } else {
+    currentInversion = inversionToUse;
+  }
+
+  // Play with the provided intervals
+  playChord(root, forcedIntervals, forcedSize, String(forcedName));
+
+  if (currentChord.size > 0) {
+    lastPlayedNote = currentChord.notes[0];
+  }
+}
+
 void playChord(int root, const int* intervals, int size, String name) {
   stopCurrentChord();
   

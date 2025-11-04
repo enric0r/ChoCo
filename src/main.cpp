@@ -62,7 +62,42 @@ void loop() {
         // Normal mode - play chords (only if C is NOT held)
         else if (!cButtonHeld && key >= '0' && key <= '7') {
             Serial.print("Play key press | key="); Serial.print(key);
-            handleKeyPress(key);
+
+            // If joystick is held in a direction, apply the mapped variation immediately
+            int xNow = analogRead(JOYSTICK_X);
+            int yNow = analogRead(JOYSTICK_Y);
+            auto dirFromAxisQuick = [](int v){ if (v < 350) return -1; if (v > 650) return 1; return 0; };
+            int dx = dirFromAxisQuick(xNow);
+            int dy = dirFromAxisQuick(yNow);
+
+            const int* varIntervals = nullptr; int varSize = 0; const char* varName = nullptr;
+            if (dx == 0 && dy == 1) {           // Up
+                varIntervals = CHORD_MAJ7; varSize = 4; varName = "Maj7";
+            } else if (dx == 0 && dy == -1) {   // Down
+                varIntervals = CHORD_MIN7; varSize = 4; varName = "Min7";
+            } else if (dx == -1 && dy == 0) {   // Left
+                varIntervals = CHORD_SUS2; varSize = 3; varName = "Sus2";
+            } else if (dx == 1 && dy == 0) {    // Right
+                varIntervals = CHORD_SUS4; varSize = 3; varName = "Sus4";
+            } else if (dx == 1 && dy == 1) {    // Up-Right
+                varIntervals = CHORD_DOM9; varSize = 5; varName = "9";
+            } else if (dx == -1 && dy == 1) {   // Up-Left
+                varIntervals = CHORD_DOM11; varSize = 5; varName = "11";
+            } else if (dx == 1 && dy == -1) {   // Down-Right
+                varIntervals = CHORD_MIN9; varSize = 5; varName = "Min9";
+            } else if (dx == -1 && dy == -1) {  // Down-Left
+                varIntervals = CHORD_DIM; varSize = 3; varName = "Dim";
+            }
+
+            int degree = key - '0';
+            if (varIntervals != nullptr) {
+                Serial.print(" | Initial variation: "); Serial.println(varName);
+                // Prime joystick state to avoid immediate duplicate re-application
+                primeJoystickDirection(dx, dy);
+                playChordForDegreeWithIntervals(degree, varIntervals, varSize, varName);
+            } else {
+                handleKeyPress(key);
+            }
             activeKey = key;
             releaseStart = 0;
         }

@@ -26,6 +26,13 @@ static unsigned long lastDebounceTime = 0;
 static const unsigned long debounceDelay = 10;
 
 static unsigned long lastJoystickMoveTime = 0;
+// Track last joystick direction at file scope so we can prime it externally
+static int g_lastDx = 0;
+static int g_lastDy = 0;
+static bool g_lastBtnHeld = false;
+static unsigned long g_lastIgnoreLog = 0;
+static unsigned long g_lastBtnPressTime = 0;
+static int g_btnPressCount = 0;
 
 // Function button state (using button 'C' as function button)
 static bool functionButtonHeld = false;
@@ -279,12 +286,12 @@ static void applyChordVariation(int dx, int dy) {
 }
 
 void handleJoystick(int x, int y) {
-  static int lastDx = 0;
-  static int lastDy = 0;
-  static bool lastBtnHeld = false;
-  static unsigned long lastIgnoreLog = 0;
-  static unsigned long lastBtnPressTime = 0;
-  static int btnPressCount = 0;
+  int &lastDx = g_lastDx;
+  int &lastDy = g_lastDy;
+  bool &lastBtnHeld = g_lastBtnHeld;
+  unsigned long &lastIgnoreLog = g_lastIgnoreLog;
+  unsigned long &lastBtnPressTime = g_lastBtnPressTime;
+  int &btnPressCount = g_btnPressCount;
 
   // Read joystick button
   bool held = isJoyButtonHeld();
@@ -357,4 +364,10 @@ void handleJoystick(int x, int y) {
     lastDy = dy;
     lastJoystickMoveTime = millis();
   }
+}
+
+void primeJoystickDirection(int dx, int dy) {
+  g_lastDx = dx;
+  g_lastDy = dy;
+  lastJoystickMoveTime = millis();
 }
