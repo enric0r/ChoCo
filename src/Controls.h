@@ -18,4 +18,8 @@ void setupControls();
 void handleKeyPress(char key);
 void handleJoystick(int x, int y);
 
+// Seed the joystick direction state to avoid immediate re-application
+// of the same variation right after starting a chord with a held joystick.
+void primeJoystickDirection(int dx, int dy);
+
 #endif

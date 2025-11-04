@@ -28,6 +28,9 @@ enum ScaleType : uint8_t {
 
 void playChordForDegree(int degree);
 void playChord(int root, const int* intervals, int size, String name);
+// Play a chord for the given degree using an explicit intervals set (e.g., Maj7, Sus).
+// Applies stored inversion/auto-voicing like playChordForDegree.
+void playChordForDegreeWithIntervals(int degree, const int* intervals, int size, const char* name);
 void stopCurrentChord();
 String getCurrentChordName();
 int getCurrentRootNote();
@@ -57,6 +60,12 @@ void toggleBassMode();
 bool isAutoVoicingMode();
 void setAutoVoicingMode(bool enabled);
 void toggleAutoVoicingMode();
+
+// Chord history functions
+void printChordHistory();
+int getChordHistoryCount();
+String getChordHistoryEntry(int index); // 0 = most recent
+int getChordHistoryDegree(int index);   // Get degree number for display (0-6, or -1 if unknown)
 
 extern const int CHORD_MAJ[];
 extern const int CHORD_MIN[];

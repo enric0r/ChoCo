@@ -34,6 +34,12 @@ static int chordInversions[7] = {0, 0, 0, 0, 0, 0, 0};
 // Auto-voicing mode: automatically selects inversions to keep within octave
 static bool autoVoicingMode = AUTO_VOICING_ENABLED_DEFAULT;
 static int lastPlayedNote = BASE_NOTE; // Track last note for voice leading
+// Chord history: circular buffer storing last 6 chords
+#define CHORD_HISTORY_SIZE 6
+static String chordHistory[CHORD_HISTORY_SIZE];
+static int chordHistoryDegrees[CHORD_HISTORY_SIZE]; // Store degree numbers for display
+static int historyWriteIndex = 0;
+static int historyCount = 0;
 
 const int CHORD_MAJ[] = {0, 4, 7};
 const int CHORD_MIN[] = {0, 3, 7};
@@ -166,6 +172,77 @@ void playChordForDegree(int degree) {
   }
 }
 
+// Variant: play a specific degree but with custom chord intervals (e.g., Maj7/Sus)
+void playChordForDegreeWithIntervals(int degree, const int* forcedIntervals, int forcedSize, const char* forcedName) {
+  stopCurrentChord();
+
+  // Resolve current scale intervals
+  auto getIntervals = [](ScaleType t) -> const uint8_t* {
+    switch (t) {
+      case SCALE_IONIAN:         return IONIAN_INTERVALS;
+      case SCALE_DORIAN:         return DORIAN_INTERVALS;
+      case SCALE_PHRYGIAN:       return PHRYGIAN_INTERVALS;
+      case SCALE_LYDIAN:         return LYDIAN_INTERVALS;
+      case SCALE_MIXOLYDIAN:     return MIXOLYDIAN_INTERVALS;
+      case SCALE_AEOLIAN:        return AEOLIAN_INTERVALS;
+      case SCALE_LOCRIAN:        return LOCRIAN_INTERVALS;
+      case SCALE_HARMONIC_MINOR: return HARM_MIN_INTERVALS;
+      case SCALE_MELODIC_MINOR:  return MELO_MIN_INTERVALS;
+      default:                   return IONIAN_INTERVALS;
+    }
+  };
+
+  const uint8_t* scale = getIntervals(currentScale);
+  int root = rootNote + scale[degree];
+
+  // Determine inversion to use
+  int inversionToUse = chordInversions[degree];
+
+  // Auto-voicing support using the provided intervals
+  if (autoVoicingMode) {
+    int bestInversion = 0;
+    int bestOctave = 0;
+    int bestScore = -10000;
+    for (int octaveShift = -1; octaveShift <= 1; octaveShift++) {
+      int testRoot = root + (octaveShift * 12);
+      for (int testInv = 0; testInv < 3; testInv++) {
+        int lowestNote = 127, highestNote = 0;
+        for (int i = 0; i < forcedSize; i++) {
+          int n = testRoot + forcedIntervals[i];
+          if (i < testInv) n += 12;
+          if (n < lowestNote) lowestNote = n;
+          if (n > highestNote) highestNote = n;
+        }
+        int score = 0;
+        bool inRange = (lowestNote >= AUTO_VOICING_MIN_NOTE && highestNote <= AUTO_VOICING_MAX_NOTE);
+        if (inRange) score += 10000; else {
+          if (lowestNote < AUTO_VOICING_MIN_NOTE) score -= (AUTO_VOICING_MIN_NOTE - lowestNote) * 100;
+          if (highestNote > AUTO_VOICING_MAX_NOTE) score -= (highestNote - AUTO_VOICING_MAX_NOTE) * 100;
+        }
+        int distance = abs(lowestNote - lastPlayedNote);
+        score -= distance;
+        if (score > bestScore) { bestScore = score; bestInversion = testInv; bestOctave = octaveShift; }
+      }
+    }
+    root = root + (bestOctave * 12);
+    inversionToUse = bestInversion;
+    currentInversion = inversionToUse;
+    Serial.print("Auto-voicing (forced): degree="); Serial.print(degree);
+    Serial.print(" root="); Serial.print(root);
+    Serial.print(" octave="); Serial.print(bestOctave);
+    Serial.print(" inversion="); Serial.println(bestInversion);
+  } else {
+    currentInversion = inversionToUse;
+  }
+
+  // Play with the provided intervals
+  playChord(root, forcedIntervals, forcedSize, String(forcedName));
+
+  if (currentChord.size > 0) {
+    lastPlayedNote = currentChord.notes[0];
+  }
+}
+
 void playChord(int root, const int* intervals, int size, String name) {
   stopCurrentChord();
   
@@ -255,6 +332,24 @@ void playChord(int root, const int* intervals, int size, String name) {
   }
   Serial.println();
 #endif
+
+  // Add to history (store root note name + chord name + roman numeral if available)
+  String historyEntry = getNoteName(root) + " " + currentChord.name;
+  #if LOG_CHORDS
+  if (degree >= 0) {
+    historyEntry += " (";
+    historyEntry += rn;
+    historyEntry += ")";
+    chordHistoryDegrees[historyWriteIndex] = degree; // Store degree for display
+  } else {
+    chordHistoryDegrees[historyWriteIndex] = -1; // Unknown degree
+  }
+  #else
+  chordHistoryDegrees[historyWriteIndex] = -1;
+  #endif
+  chordHistory[historyWriteIndex] = historyEntry;
+  historyWriteIndex = (historyWriteIndex + 1) % CHORD_HISTORY_SIZE;
+  if (historyCount < CHORD_HISTORY_SIZE) historyCount++;
 }
 
 void stopCurrentChord() {
@@ -389,4 +484,39 @@ const char* getCurrentScaleName() {
     case SCALE_MELODIC_MINOR: return "MelMin";
     default: return "Ionian";
   }
+}// Temporary file - append this to ChordEngine.cpp after getCurrentScaleName()
+
+// ---- Chord History ----
+void printChordHistory() {
+  if (historyCount == 0) {
+    Serial.println("Chord history: (empty)");
+    return;
+  }
+  Serial.println("=== Chord History (most recent first) ===");
+  for (int i = 0; i < historyCount; i++) {
+    // Read backwards from most recent
+    int index = (historyWriteIndex - 1 - i + CHORD_HISTORY_SIZE) % CHORD_HISTORY_SIZE;
+    Serial.print(i + 1);
+    Serial.print(". ");
+    Serial.println(chordHistory[index]);
+  }
+  Serial.println("=========================================");
+}
+
+int getChordHistoryCount() {
+  return historyCount;
+}
+
+String getChordHistoryEntry(int index) {
+  if (index < 0 || index >= historyCount) return "";
+  // 0 = most recent
+  int arrayIndex = (historyWriteIndex - 1 - index + CHORD_HISTORY_SIZE) % CHORD_HISTORY_SIZE;
+  return chordHistory[arrayIndex];
+}
+
+int getChordHistoryDegree(int index) {
+  if (index < 0 || index >= historyCount) return -1;
+  // 0 = most recent
+  int arrayIndex = (historyWriteIndex - 1 - index + CHORD_HISTORY_SIZE) % CHORD_HISTORY_SIZE;
+  return chordHistoryDegrees[arrayIndex];
 }
