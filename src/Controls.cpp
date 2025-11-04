@@ -233,6 +233,13 @@ void handleJoystick(int x, int y) {
   if (held != lastBtnHeld) {
     Serial.print("Joystick BTN: ");
     Serial.println(held ? "PRESSED" : "RELEASED");
+    
+    // Toggle bass mode on button press (not release)
+    if (held && !lastBtnHeld) {
+      toggleBassMode();
+      showStatus(String("Bass: ") + (isBassMode() ? "ON" : "OFF"), 500);
+    }
+    
     lastBtnHeld = held;
   }
 

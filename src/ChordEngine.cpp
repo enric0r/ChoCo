@@ -17,6 +17,8 @@ static Chord currentChord = {{0}, 0, 0, ""};
 static int rootNote = BASE_NOTE;
 static bool minorScale = false;
 static int currentInversion = 0;
+static bool bassMode = BASS_MODE_ENABLED_DEFAULT;
+static int bassNote = -1; // Track active bass note (-1 = none)
 
 const int CHORD_MAJ[] = {0, 4, 7};
 const int CHORD_MIN[] = {0, 3, 7};
@@ -54,6 +56,13 @@ void playChordForDegree(int degree) {
 
 void playChord(int root, const int* intervals, int size, String name) {
   stopCurrentChord();
+  
+  // Play bass note if bass mode is enabled
+  if (bassMode) {
+    bassNote = root + BASS_OCTAVE_OFFSET;
+    if (bassNote < 0) bassNote = 0; // Clamp to valid MIDI range
+    midiNoteOn(bassNote, 80); // Slightly lower velocity for bass
+  }
   
   for(int i = 0; i < size; i++) {
     int note = root + intervals[i];
@@ -102,6 +111,11 @@ void playChord(int root, const int* intervals, int size, String name) {
     Serial.print(getNoteName(currentChord.notes[i]));
     Serial.print(" (" ); Serial.print(currentChord.notes[i]); Serial.print(")");
   }
+  if (bassNote >= 0) {
+    Serial.print(" | Bass: ");
+    Serial.print(getNoteName(bassNote));
+    Serial.print(" ("); Serial.print(bassNote); Serial.print(")");
+  }
   Serial.println();
 #endif
 }
@@ -113,6 +127,13 @@ void stopCurrentChord() {
     Serial.println(currentChord.name);
   }
 #endif
+  
+  // Stop bass note if active
+  if (bassNote >= 0) {
+    midiNoteOff(bassNote, 0);
+    bassNote = -1;
+  }
+  
   for(int i = 0; i < currentChord.size; i++) {
     midiNoteOff(currentChord.notes[i], 0);
   }
@@ -157,4 +178,18 @@ bool isChordActive() {
 int getActiveChordRoot() {
   if (currentChord.size > 0) return currentChord.root;
   return getCurrentRootNote();
+}
+
+bool isBassMode() {
+  return bassMode;
+}
+
+void setBassMode(bool enabled) {
+  bassMode = enabled;
+}
+
+void toggleBassMode() {
+  bassMode = !bassMode;
+  Serial.print("Bass mode: ");
+  Serial.println(bassMode ? "ON" : "OFF");
 }

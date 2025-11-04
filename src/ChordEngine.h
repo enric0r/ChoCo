@@ -26,6 +26,11 @@ int getCurrentInversion();
 bool isChordActive();
 int getActiveChordRoot();
 
+// Bass mode functions
+bool isBassMode();
+void setBassMode(bool enabled);
+void toggleBassMode();
+
 extern const int CHORD_MAJ[];
 extern const int CHORD_MIN[];
 extern const int CHORD_DIM[];

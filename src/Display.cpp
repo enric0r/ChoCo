@@ -92,6 +92,12 @@ void updateDisplay() {
   display.print(" ");
   display.print(isMinorScale() ? "Min" : "Maj");
   
+  // Show bass mode indicator
+  if (isBassMode()) {
+    display.setCursor(0, 56);
+    display.print("[BASS]");
+  }
+  
   display.display();
 }
 

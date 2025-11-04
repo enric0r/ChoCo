@@ -17,7 +17,7 @@
 #define JOYSTICK_X A0
 #define JOYSTICK_Y A1
 // Joystick button: mapped to GP7 in your CircuitPython config
-#define JOYSTICK_BTN 7
+#define JOYSTICK_BTN 13
 
 // I2C pins (change these if your wiring uses different GPIOs)
 // Set to match CircuitPython wiring: SDA=GP14, SCL=GP15
@@ -31,6 +31,10 @@
 
 // Musical constants
 #define BASE_NOTE 60 // Middle C
+// Bass mode: when enabled, plays the root note one octave below the chord
+#define BASS_MODE_ENABLED_DEFAULT false
+#define BASS_OCTAVE_OFFSET -12 // One octave below chord root
+
 // Time gating between successive joystick-driven chord variation changes.
 // Lower value makes the joystick feel more responsive.
 #define JOYSTICK_GRACE_PERIOD 120 // ms (was 300)
