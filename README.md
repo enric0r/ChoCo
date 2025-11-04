@@ -60,6 +60,16 @@ Variations apply only when a chord is currently active:
 - Down‑Right: Min9
 - Down‑Left: Dim
 
+### Octave Change
+
+While holding the C modifier key, you can change the octave by moving the joystick left or right:
+
+- Hold C + Joystick Left: Decrease octave (-1)
+- Hold C + Joystick Right: Increase octave (+1)
+- Range: -2 to +2 octaves
+- The current octave offset is displayed on screen when changed
+- The octave offset applies to all chords until changed again
+
 Responsiveness
 - Deadzone tightened: X/Y < 350 ⇒ −1, > 650 ⇒ +1, otherwise 0 (see `dirFromAxis`)
 - First movement out of center applies immediately; subsequent changes use a short grace period

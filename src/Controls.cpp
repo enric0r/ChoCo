@@ -365,9 +365,17 @@ void handleJoystick(int x, int y) {
       lastJoystickMoveTime = millis();
       return; // Don't apply chord variation when changing octave
     }
+    // If joystick is still in the same direction, just return without processing
+    if (dx == lastOctaveDx) {
+      lastDx = dx;
+      lastDy = dy;
+      return;
+    }
   } else {
-    // Reset octave change tracking when C is not held or joystick is not left/right
-    lastOctaveDx = 0;
+    // Reset octave change tracking when C is not held or joystick is not left/right only
+    if (!cHeld || dx == 0) {
+      lastOctaveDx = 0;
+    }
   }
 
   // If direction changed, apply variation. Apply immediately on first move out of center;
