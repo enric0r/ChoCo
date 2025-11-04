@@ -105,6 +105,26 @@ void updateDisplay() {
     display.print(getCurrentInversion());
   }
   
+  // Show recent chord history (compact, last 2-3 chords)
+  int histCount = getChordHistoryCount();
+  if (histCount > 0) {
+    display.setCursor(0, 48);
+    display.setTextSize(1);
+    display.print("< ");
+    
+    // Show up to 3 most recent degrees, newest first
+    int toShow = min(3, histCount);
+    for (int i = 0; i < toShow; i++) {
+      if (i > 0) display.print("-");
+      int deg = getChordHistoryDegree(i);
+      if (deg >= 0 && deg <= 6) {
+        display.print(deg);
+      } else {
+        display.print("?");
+      }
+    }
+  }
+  
   display.display();
 }
 

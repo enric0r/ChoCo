@@ -66,8 +66,14 @@ void loop() {
             activeKey = key;
             releaseStart = 0;
         }
-        // Function keys (A, B) work normally
-        else if (key == 'A' || key == 'B') {
+        // Chord history: hold C and press 'B'
+        else if (cButtonHeld && key == 'B') {
+            Serial.println("Printing chord history...");
+            printChordHistory();
+            showStatus("History", 600);
+        }
+        // Function keys (A, B) work normally when C not held
+        else if (!cButtonHeld && (key == 'A' || key == 'B')) {
             Serial.print("Function key press | key="); Serial.println(key);
             handleKeyPress(key);
         }

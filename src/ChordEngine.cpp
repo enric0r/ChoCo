@@ -34,6 +34,12 @@ static int chordInversions[7] = {0, 0, 0, 0, 0, 0, 0};
 // Auto-voicing mode: automatically selects inversions to keep within octave
 static bool autoVoicingMode = AUTO_VOICING_ENABLED_DEFAULT;
 static int lastPlayedNote = BASE_NOTE; // Track last note for voice leading
+// Chord history: circular buffer storing last 6 chords
+#define CHORD_HISTORY_SIZE 6
+static String chordHistory[CHORD_HISTORY_SIZE];
+static int chordHistoryDegrees[CHORD_HISTORY_SIZE]; // Store degree numbers for display
+static int historyWriteIndex = 0;
+static int historyCount = 0;
 
 const int CHORD_MAJ[] = {0, 4, 7};
 const int CHORD_MIN[] = {0, 3, 7};
@@ -255,6 +261,24 @@ void playChord(int root, const int* intervals, int size, String name) {
   }
   Serial.println();
 #endif
+
+  // Add to history (store root note name + chord name + roman numeral if available)
+  String historyEntry = getNoteName(root) + " " + currentChord.name;
+  #if LOG_CHORDS
+  if (degree >= 0) {
+    historyEntry += " (";
+    historyEntry += rn;
+    historyEntry += ")";
+    chordHistoryDegrees[historyWriteIndex] = degree; // Store degree for display
+  } else {
+    chordHistoryDegrees[historyWriteIndex] = -1; // Unknown degree
+  }
+  #else
+  chordHistoryDegrees[historyWriteIndex] = -1;
+  #endif
+  chordHistory[historyWriteIndex] = historyEntry;
+  historyWriteIndex = (historyWriteIndex + 1) % CHORD_HISTORY_SIZE;
+  if (historyCount < CHORD_HISTORY_SIZE) historyCount++;
 }
 
 void stopCurrentChord() {
@@ -389,4 +413,39 @@ const char* getCurrentScaleName() {
     case SCALE_MELODIC_MINOR: return "MelMin";
     default: return "Ionian";
   }
+}// Temporary file - append this to ChordEngine.cpp after getCurrentScaleName()
+
+// ---- Chord History ----
+void printChordHistory() {
+  if (historyCount == 0) {
+    Serial.println("Chord history: (empty)");
+    return;
+  }
+  Serial.println("=== Chord History (most recent first) ===");
+  for (int i = 0; i < historyCount; i++) {
+    // Read backwards from most recent
+    int index = (historyWriteIndex - 1 - i + CHORD_HISTORY_SIZE) % CHORD_HISTORY_SIZE;
+    Serial.print(i + 1);
+    Serial.print(". ");
+    Serial.println(chordHistory[index]);
+  }
+  Serial.println("=========================================");
+}
+
+int getChordHistoryCount() {
+  return historyCount;
+}
+
+String getChordHistoryEntry(int index) {
+  if (index < 0 || index >= historyCount) return "";
+  // 0 = most recent
+  int arrayIndex = (historyWriteIndex - 1 - index + CHORD_HISTORY_SIZE) % CHORD_HISTORY_SIZE;
+  return chordHistory[arrayIndex];
+}
+
+int getChordHistoryDegree(int index) {
+  if (index < 0 || index >= historyCount) return -1;
+  // 0 = most recent
+  int arrayIndex = (historyWriteIndex - 1 - index + CHORD_HISTORY_SIZE) % CHORD_HISTORY_SIZE;
+  return chordHistoryDegrees[arrayIndex];
 }
