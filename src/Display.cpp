@@ -92,21 +92,26 @@ void updateDisplay() {
   display.print(" ");
   display.print(isMinorScale() ? "Min" : "Maj");
   
-  // Show bass mode indicator
+  // Show bass mode and inversion indicators
+  display.setCursor(0, 56);
   if (isBassMode()) {
-    display.setCursor(0, 56);
-    display.print("[BASS]");
+    display.print("[BASS] ");
+  }
+  if (isAutoVoicingMode()) {
+    display.print("[AV] ");
+  }
+  if (getCurrentInversion() > 0 && !isAutoVoicingMode()) {
+    display.print("Inv:");
+    display.print(getCurrentInversion());
   }
   
   display.display();
 }
 
 void showStatus(String message, unsigned long durationMs) {
-  // Set timed message and render on next update without blocking
+  // Set timed message - it will be shown on the next updateDisplay() call
   g_statusMessage = message;
   g_statusUntil = millis() + durationMs;
-  // Optionally force an immediate refresh
-  updateDisplay();
 }
 
 String getNoteName(int noteNumber) {

@@ -35,6 +35,11 @@
 #define BASS_MODE_ENABLED_DEFAULT false
 #define BASS_OCTAVE_OFFSET -12 // One octave below chord root
 
+// Auto-voicing mode: automatically selects inversions to keep chords within octave
+#define AUTO_VOICING_ENABLED_DEFAULT false
+#define AUTO_VOICING_MIN_NOTE 60  // C4 - lowest note allowed
+#define AUTO_VOICING_MAX_NOTE 72  // C5 - highest note allowed (one octave range)
+
 // Time gating between successive joystick-driven chord variation changes.
 // Lower value makes the joystick feel more responsive.
 #define JOYSTICK_GRACE_PERIOD 120 // ms (was 300)

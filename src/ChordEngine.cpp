@@ -3,6 +3,11 @@
 
 const uint8_t MAJOR_INTERVALS[7] = {0, 2, 4, 5, 7, 9, 11}; //Ionian-Major
 const uint8_t MINOR_INTERVALS[7] = {0, 2, 3, 5, 7, 8, 10}; //Aeolian-Minor
+const uint8_t DORIAN_INTERVALS[7] = {0, 2, 3, 5, 7, 9, 10}; // Dorian
+const uint8_t PHRYGIAN_INTERVALS[7] = {0, 1, 3, 5, 7, 8, 10}; // Phrygian
+const uint8_t LYDIAN_INTERVALS[7] = {0, 2, 4, 6, 7, 9, 11}; // Lydian
+const uint8_t MIXOLYDIAN_INTERVALS[7] = {0, 2, 4, 5, 7, 9, 10}; // Mixolydian
+const uint8_t LOCRIAN_INTERVALS[7] = {0, 1, 3, 5, 6, 8, 10}; // Locrian
 
 const uint16_t BIT(uint8_t n) { return (1u << n); }
 
@@ -19,6 +24,13 @@ static bool minorScale = false;
 static int currentInversion = 0;
 static bool bassMode = BASS_MODE_ENABLED_DEFAULT;
 static int bassNote = -1; // Track active bass note (-1 = none)
+
+// Per-chord inversion memory: stores inversion for each degree (0-6)
+static int chordInversions[7] = {0, 0, 0, 0, 0, 0, 0};
+
+// Auto-voicing mode: automatically selects inversions to keep within octave
+static bool autoVoicingMode = AUTO_VOICING_ENABLED_DEFAULT;
+static int lastPlayedNote = BASE_NOTE; // Track last note for voice leading
 
 const int CHORD_MAJ[] = {0, 4, 7};
 const int CHORD_MIN[] = {0, 3, 7};
@@ -39,6 +51,76 @@ void playChordForDegree(int degree) {
   const int* scale = minorScale ? MINOR_SCALE : MAJOR_SCALE;
   int root = rootNote + scale[degree];
   
+  // Determine inversion to use
+  int inversionToUse = chordInversions[degree];
+  
+  // If auto-voicing is enabled, calculate best inversion and octave to stay in range
+  if (autoVoicingMode) {
+    // Try different octaves and inversions to find the best fit
+    int bestInversion = 0;
+    int bestOctave = 0;
+    int bestScore = -10000;
+    
+    // Try octaves from -1 to +1 relative to current root
+    for (int octaveShift = -1; octaveShift <= 1; octaveShift++) {
+      int testRoot = root + (octaveShift * 12);
+      
+      // Try each inversion
+      for (int testInv = 0; testInv < 3; testInv++) {
+        int lowestNote = 127;
+        int highestNote = 0;
+        
+        // Calculate actual notes for this combination
+        for (int i = 0; i < 3; i++) {
+          int testNote = testRoot + CHORD_MAJ[i];
+          if (i < testInv) testNote += 12;
+          if (testNote < lowestNote) lowestNote = testNote;
+          if (testNote > highestNote) highestNote = testNote;
+        }
+        
+        // Score this combination
+        int score = 0;
+        
+        // Heavily prefer combinations that keep ALL notes within the target range
+        bool inRange = (lowestNote >= AUTO_VOICING_MIN_NOTE && highestNote <= AUTO_VOICING_MAX_NOTE);
+        if (inRange) {
+          score += 10000;
+        } else {
+          // Heavy penalty for notes outside range
+          if (lowestNote < AUTO_VOICING_MIN_NOTE) score -= (AUTO_VOICING_MIN_NOTE - lowestNote) * 100;
+          if (highestNote > AUTO_VOICING_MAX_NOTE) score -= (highestNote - AUTO_VOICING_MAX_NOTE) * 100;
+        }
+        
+        // Prefer smoother voice leading (closer to last played note)
+        int distance = abs(lowestNote - lastPlayedNote);
+        score -= distance;
+        
+        if (score > bestScore) {
+          bestScore = score;
+          bestInversion = testInv;
+          bestOctave = octaveShift;
+        }
+      }
+    }
+    
+    // Apply the best octave shift to the root
+    root = root + (bestOctave * 12);
+    inversionToUse = bestInversion;
+    currentInversion = inversionToUse;
+    
+    Serial.print("Auto-voicing: degree=");
+    Serial.print(degree);
+    Serial.print(" root=");
+    Serial.print(root);
+    Serial.print(" octave=");
+    Serial.print(bestOctave);
+    Serial.print(" inversion=");
+    Serial.println(bestInversion);
+  } else {
+    // Use the stored inversion for this degree
+    currentInversion = inversionToUse;
+  }
+  
   if (minorScale) {
     switch(degree) {
       case 0: playChord(root, CHORD_MIN, 3, "Min"); break;
@@ -51,6 +133,11 @@ void playChordForDegree(int degree) {
       case 1: case 2: case 5: playChord(root, CHORD_MIN, 3, "Min"); break;
       case 6: playChord(root, CHORD_DIM, 3, "Dim"); break;
     }
+  }
+  
+  // Update last played note for voice leading
+  if (currentChord.size > 0) {
+    lastPlayedNote = currentChord.notes[0];
   }
 }
 
@@ -171,6 +258,33 @@ int getCurrentInversion() {
   return currentInversion;
 }
 
+void setInversionForDegree(int degree, int inversion) {
+  if (degree >= 0 && degree < 7) {
+    chordInversions[degree] = inversion % 3; // cycle 0..2
+    Serial.print("Set inversion for degree ");
+    Serial.print(degree);
+    Serial.print(" to ");
+    Serial.println(chordInversions[degree]);
+  }
+}
+
+int getInversionForDegree(int degree) {
+  if (degree >= 0 && degree < 7) {
+    return chordInversions[degree];
+  }
+  return 0;
+}
+
+void cycleInversionForDegree(int degree) {
+  if (degree >= 0 && degree < 7) {
+    chordInversions[degree] = (chordInversions[degree] + 1) % 3;
+    Serial.print("Cycled inversion for degree ");
+    Serial.print(degree);
+    Serial.print(" to ");
+    Serial.println(chordInversions[degree]);
+  }
+}
+
 bool isChordActive() {
   return currentChord.size > 0;
 }
@@ -192,4 +306,20 @@ void toggleBassMode() {
   bassMode = !bassMode;
   Serial.print("Bass mode: ");
   Serial.println(bassMode ? "ON" : "OFF");
+}
+
+bool isAutoVoicingMode() {
+  return autoVoicingMode;
+}
+
+void setAutoVoicingMode(bool enabled) {
+  autoVoicingMode = enabled;
+  Serial.print("Auto-voicing mode: ");
+  Serial.println(autoVoicingMode ? "ON" : "OFF");
+}
+
+void toggleAutoVoicingMode() {
+  autoVoicingMode = !autoVoicingMode;
+  Serial.print("Auto-voicing mode: ");
+  Serial.println(autoVoicingMode ? "ON" : "OFF");
 }

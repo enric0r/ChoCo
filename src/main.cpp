@@ -28,14 +28,49 @@ void loop() {
     // Read keypad using custom scanner
     static char activeKey = NO_KEY;               // last key whose chord we started
     static unsigned long releaseStart = 0;        // when we first saw no-key
+    static bool lastEditMode = false;             // track transitions for logging
 
+    // Check if C button is being held (for inversion edit mode)
+    bool cButtonHeld = isModifierCHeld();
+    if (cButtonHeld != lastEditMode) {
+        char pressed[32];
+        debugScanPressedKeys(pressed, sizeof(pressed));
+        Serial.print("EditMode ");
+        Serial.print(cButtonHeld ? "ON" : "OFF");
+        Serial.print(" | Cheld="); Serial.print(cButtonHeld ? "1" : "0");
+        Serial.print(" | pressed=["); Serial.print(pressed); Serial.println("]");
+        lastEditMode = cButtonHeld;
+    }
+    
+    // Get debounced key
     char key = getKey();
+    
+    // Handle key presses
     if (key != NO_KEY) {
-        Serial.print("Key pressed: ");
-        Serial.println(key);
-        handleKeyPress(key);
-        activeKey = key;           // track which key started the chord
-        releaseStart = 0;          // reset release timing
+        // If we're in edit mode (C held) and a chord key (0-6) is pressed
+        if (cButtonHeld && key >= '0' && key <= '6') {
+            int degree = key - '0';
+            Serial.print("Inversion-edit key press | degree="); Serial.print(degree);
+            Serial.print(" | before inv="); Serial.println(getInversionForDegree(degree));
+            cycleInversionForDegree(degree);
+            int inv = getInversionForDegree(degree);
+            showStatus(String("Deg ") + degree + " Inv: " + inv, 800);
+            Serial.print("Inversion set | degree="); Serial.print(degree);
+            Serial.print(" | after inv="); Serial.println(inv);
+            // Don't play chord or set activeKey in edit mode
+        }
+        // Normal mode - play chords (only if C is NOT held)
+        else if (!cButtonHeld && key >= '0' && key <= '7') {
+            Serial.print("Play key press | key="); Serial.print(key);
+            handleKeyPress(key);
+            activeKey = key;
+            releaseStart = 0;
+        }
+        // Function keys (A, B) work normally
+        else if (key == 'A' || key == 'B') {
+            Serial.print("Function key press | key="); Serial.println(key);
+            handleKeyPress(key);
+        }
     }
     
     // Read joystick
@@ -52,7 +87,6 @@ void loop() {
                 stopCurrentChord();
                 activeKey = NO_KEY;
                 releaseStart = 0;
-                // Serial.println("Key released: stopping chord");
             }
         } else {
             // still held, reset release timer

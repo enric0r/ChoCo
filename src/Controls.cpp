@@ -26,6 +26,11 @@ static unsigned long lastDebounceTime = 0;
 static const unsigned long debounceDelay = 10;
 
 static unsigned long lastJoystickMoveTime = 0;
+
+// Function button state (using button 'C' as function button)
+static bool functionButtonHeld = false;
+static char lastKeyRaw = NO_KEY;
+
 // Helper to determine if the joystick button is currently held considering polarity
 static inline bool isJoyButtonHeld() {
   int raw = digitalRead(JOYSTICK_BTN);
@@ -53,12 +58,12 @@ char scanKeypad() {
         char foundKey = keys[r][c];
         // Immediately deactivate this row before returning to avoid ghosting
         digitalWrite(rowPins[r], HIGH);
-        Serial.print("Raw key detected: ");
-        Serial.print(foundKey);
-        Serial.print(" at row=");
-        Serial.print(r);
-        Serial.print(" col=");
-        Serial.println(c);
+        // Serial.print("Raw key detected: ");
+        // Serial.print(foundKey);
+        // Serial.print(" at row=");
+        // Serial.print(r);
+        // Serial.print(" col=");
+        // Serial.println(c);
         return foundKey;
       }
     }
@@ -87,10 +92,10 @@ char getKey() {
   
   // Debounce: only update when key changes
   if (key != lastKey) {
-    Serial.print("Key changed from ");
-    Serial.print(lastKey == NO_KEY ? "NO_KEY" : String(lastKey));
-    Serial.print(" to ");
-    Serial.println(key == NO_KEY ? "NO_KEY" : String(key));
+    // Serial.print("Key changed from ");
+    // Serial.print(lastKey == NO_KEY ? "NO_KEY" : String(lastKey));
+    // Serial.print(" to ");
+    // Serial.println(key == NO_KEY ? "NO_KEY" : String(key));
     lastDebounceTime = millis();
     lastKey = key;
     lastReportedKey = NO_KEY; // Reset so we can report the new key
@@ -98,7 +103,7 @@ char getKey() {
   
   // Report key if it's been stable for debounce period and we haven't reported it yet
   if ((millis() - lastDebounceTime) > debounceDelay && key != NO_KEY && key != lastReportedKey) {
-    Serial.print("Reporting key after debounce: ");
+    Serial.print("Key: ");
     Serial.println(key);
     lastReportedKey = key;
     return key;
@@ -115,6 +120,60 @@ char getKey() {
 // Immediate, no-debounce read of the matrix
 char getRawKey() {
   return scanKeypad();
+}
+
+// Debug-only helper: scan the entire matrix and list all pressed keys.
+// Writes a space-separated string of pressed keys into `out`.
+// Intended for logging on state transitions, not for high-frequency polling.
+void debugScanPressedKeys(char* out, int maxLen) {
+  int pos = 0;
+  // Ensure all rows inactive
+  for (int rr = 0; rr < ROWS; rr++) {
+    digitalWrite(rowPins[rr], HIGH);
+  }
+  for (int r = 0; r < ROWS; r++) {
+    digitalWrite(rowPins[r], LOW);
+    delayMicroseconds(50);
+    for (int c = 0; c < COLS; c++) {
+      if (digitalRead(colPins[c]) == LOW) {
+        char k = keys[r][c];
+        if (k != NO_KEY && pos < maxLen - 2) { // leave space for space + terminator
+          out[pos++] = k;
+          out[pos++] = ' ';
+        }
+      }
+    }
+    digitalWrite(rowPins[r], HIGH);
+  }
+  if (pos > 0 && pos < maxLen) {
+    // Replace trailing space with terminator
+    out[pos - 1] = '\0';
+  } else if (pos == 0 && maxLen > 0) {
+    out[0] = '\0';
+  }
+}
+
+// Robust modifier detection: explicitly scan for 'C' being pressed
+bool isModifierCHeld() {
+  bool held = false;
+  // Ensure all rows inactive
+  for (int rr = 0; rr < ROWS; rr++) {
+    digitalWrite(rowPins[rr], HIGH);
+  }
+  for (int r = 0; r < ROWS; r++) {
+    digitalWrite(rowPins[r], LOW);
+    delayMicroseconds(50);
+    for (int c = 0; c < COLS; c++) {
+      if (digitalRead(colPins[c]) == LOW) {
+        char k = keys[r][c];
+        if (k == 'C') {
+          held = true;
+        }
+      }
+    }
+    digitalWrite(rowPins[r], HIGH);
+  }
+  return held;
 }
 
 void setupControls() {
@@ -155,23 +214,20 @@ void setupControls() {
 }
 
 void handleKeyPress(char key) {
+  // Normal chord playing
   if (key >= '0' && key <= '7') {
     playChordForDegree(key - '0');
   }
   else if (key == 'A') {
     int newRoot = (getCurrentRootNote() + 1);
     setCurrentRootNote(newRoot);
-    showStatus(String("Root: ") + getNoteName(getCurrentRootNote()), 300); // shorter, non-blocking
+    showStatus(String("Root: ") + getNoteName(getCurrentRootNote()), 300);
   }
   else if (key == 'B') {
     setMinorScale(!isMinorScale());
     showStatus(String("Scale: ") + (isMinorScale() ? "Minor" : "Major"), 300);
   }
-  else if (key == 'C') {
-    int inv = (getCurrentInversion() + 1) % 3; // cycle 0..2
-    setCurrentInversion(inv);
-    showStatus(String("Inversion: ") + inv, 300);
-  }
+  // Button C itself doesn't do anything when pressed alone - only used as modifier
 }
 
 static int dirFromAxis(int v) {
@@ -227,17 +283,48 @@ void handleJoystick(int x, int y) {
   static int lastDy = 0;
   static bool lastBtnHeld = false;
   static unsigned long lastIgnoreLog = 0;
+  static unsigned long lastBtnPressTime = 0;
+  static int btnPressCount = 0;
 
-  // Read button and report transitions
+  // Read joystick button
   bool held = isJoyButtonHeld();
   if (held != lastBtnHeld) {
     Serial.print("Joystick BTN: ");
     Serial.println(held ? "PRESSED" : "RELEASED");
     
-    // Toggle bass mode on button press (not release)
+    // On button press
     if (held && !lastBtnHeld) {
-      toggleBassMode();
-      showStatus(String("Bass: ") + (isBassMode() ? "ON" : "OFF"), 500);
+      unsigned long now = millis();
+      
+      // Check for double-tap (within 500ms)
+      if (now - lastBtnPressTime < 500) {
+        btnPressCount++;
+        if (btnPressCount == 1) {
+          // Double tap detected - toggle auto-voicing
+          toggleAutoVoicingMode();
+          showStatus(String("AutoVoice: ") + (isAutoVoicingMode() ? "ON" : "OFF"), 800);
+          btnPressCount = 0;
+        }
+      } else {
+        // Single tap - toggle bass mode
+        btnPressCount = 0;
+      }
+      
+      lastBtnPressTime = now;
+    }
+    
+    // On button release after single tap
+    if (!held && lastBtnHeld) {
+      unsigned long now = millis();
+      if (btnPressCount == 0 && (now - lastBtnPressTime < 500)) {
+        // Wait a bit to see if it's a double tap
+        delay(200);
+        if (!isJoyButtonHeld()) {
+          // Still not pressed - it was a single tap
+          toggleBassMode();
+          showStatus(String("Bass: ") + (isBassMode() ? "ON" : "OFF"), 500);
+        }
+      }
     }
     
     lastBtnHeld = held;

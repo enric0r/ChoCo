@@ -22,6 +22,10 @@ bool isMinorScale();
 void setMinorScale(bool isMinor);
 void setCurrentInversion(int inversion);
 int getCurrentInversion();
+// Per-chord inversion functions
+void setInversionForDegree(int degree, int inversion);
+int getInversionForDegree(int degree);
+void cycleInversionForDegree(int degree);
 // True if a chord is currently sounding (notes are on)
 bool isChordActive();
 int getActiveChordRoot();
@@ -30,6 +34,11 @@ int getActiveChordRoot();
 bool isBassMode();
 void setBassMode(bool enabled);
 void toggleBassMode();
+
+// Auto-voicing mode functions
+bool isAutoVoicingMode();
+void setAutoVoicingMode(bool enabled);
+void toggleAutoVoicingMode();
 
 extern const int CHORD_MAJ[];
 extern const int CHORD_MIN[];
