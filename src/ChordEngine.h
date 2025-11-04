@@ -12,14 +12,32 @@ struct Chord {
   String name;
 };
 
+// Supported 7-note scales (modes and common minors)
+enum ScaleType : uint8_t {
+  SCALE_IONIAN = 0,      // Major
+  SCALE_DORIAN,
+  SCALE_PHRYGIAN,
+  SCALE_LYDIAN,
+  SCALE_MIXOLYDIAN,
+  SCALE_AEOLIAN,         // Natural Minor
+  SCALE_LOCRIAN,
+  SCALE_HARMONIC_MINOR,
+  SCALE_MELODIC_MINOR,
+  SCALE_COUNT
+};
+
 void playChordForDegree(int degree);
 void playChord(int root, const int* intervals, int size, String name);
 void stopCurrentChord();
 String getCurrentChordName();
 int getCurrentRootNote();
 void setCurrentRootNote(int rootNote);
-bool isMinorScale();
-void setMinorScale(bool isMinor);
+// Scale selection
+ScaleType getScaleType();
+void setScaleType(ScaleType type);
+void cycleScaleType(int step = 1);
+const char* getCurrentScaleName();
+
 void setCurrentInversion(int inversion);
 int getCurrentInversion();
 // Per-chord inversion functions

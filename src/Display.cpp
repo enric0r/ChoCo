@@ -90,7 +90,7 @@ void updateDisplay() {
   display.setCursor(0, 0);
   display.print(getNoteName(getCurrentRootNote()));
   display.print(" ");
-  display.print(isMinorScale() ? "Min" : "Maj");
+  display.print(getCurrentScaleName());
   
   // Show bass mode and inversion indicators
   display.setCursor(0, 56);

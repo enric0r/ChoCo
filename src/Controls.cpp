@@ -224,8 +224,8 @@ void handleKeyPress(char key) {
     showStatus(String("Root: ") + getNoteName(getCurrentRootNote()), 300);
   }
   else if (key == 'B') {
-    setMinorScale(!isMinorScale());
-    showStatus(String("Scale: ") + (isMinorScale() ? "Minor" : "Major"), 300);
+    cycleScaleType(1);
+    showStatus(String("Scale: ") + getCurrentScaleName(), 600);
   }
   // Button C itself doesn't do anything when pressed alone - only used as modifier
 }

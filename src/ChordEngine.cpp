@@ -1,13 +1,16 @@
 #include "ChordEngine.h"
 #include "Display.h" // for getNoteName()
 
-const uint8_t MAJOR_INTERVALS[7] = {0, 2, 4, 5, 7, 9, 11}; //Ionian-Major
-const uint8_t MINOR_INTERVALS[7] = {0, 2, 3, 5, 7, 8, 10}; //Aeolian-Minor
-const uint8_t DORIAN_INTERVALS[7] = {0, 2, 3, 5, 7, 9, 10}; // Dorian
-const uint8_t PHRYGIAN_INTERVALS[7] = {0, 1, 3, 5, 7, 8, 10}; // Phrygian
-const uint8_t LYDIAN_INTERVALS[7] = {0, 2, 4, 6, 7, 9, 11}; // Lydian
-const uint8_t MIXOLYDIAN_INTERVALS[7] = {0, 2, 4, 5, 7, 9, 10}; // Mixolydian
-const uint8_t LOCRIAN_INTERVALS[7] = {0, 1, 3, 5, 6, 8, 10}; // Locrian
+// Interval sets for supported scales (7-note)
+static const uint8_t IONIAN_INTERVALS[7]   = {0, 2, 4, 5, 7, 9, 11}; // Major
+static const uint8_t DORIAN_INTERVALS[7]   = {0, 2, 3, 5, 7, 9, 10};
+static const uint8_t PHRYGIAN_INTERVALS[7] = {0, 1, 3, 5, 7, 8, 10};
+static const uint8_t LYDIAN_INTERVALS[7]   = {0, 2, 4, 6, 7, 9, 11};
+static const uint8_t MIXOLYDIAN_INTERVALS[7]={0, 2, 4, 5, 7, 9, 10};
+static const uint8_t AEOLIAN_INTERVALS[7]  = {0, 2, 3, 5, 7, 8, 10}; // Natural minor
+static const uint8_t LOCRIAN_INTERVALS[7]  = {0, 1, 3, 5, 6, 8, 10};
+static const uint8_t HARM_MIN_INTERVALS[7] = {0, 2, 3, 5, 7, 8, 11};
+static const uint8_t MELO_MIN_INTERVALS[7] = {0, 2, 3, 5, 7, 9, 11}; // Jazz melodic minor
 
 const uint16_t BIT(uint8_t n) { return (1u << n); }
 
@@ -20,7 +23,7 @@ const uint16_t TRIAD_SUS4 = BIT(0) | BIT(5) | BIT(7); // 1-4-5
 
 static Chord currentChord = {{0}, 0, 0, ""};
 static int rootNote = BASE_NOTE;
-static bool minorScale = false;
+static ScaleType currentScale = SCALE_IONIAN;
 static int currentInversion = 0;
 static bool bassMode = BASS_MODE_ENABLED_DEFAULT;
 static int bassNote = -1; // Track active bass note (-1 = none)
@@ -48,8 +51,41 @@ const int CHORD_MIN9[] = {0, 3, 7, 10, 14};
 void playChordForDegree(int degree) {
   stopCurrentChord();
   
-  const int* scale = minorScale ? MINOR_SCALE : MAJOR_SCALE;
+  // Resolve current scale intervals
+  auto getIntervals = [](ScaleType t) -> const uint8_t* {
+    switch (t) {
+      case SCALE_IONIAN:         return IONIAN_INTERVALS;
+      case SCALE_DORIAN:         return DORIAN_INTERVALS;
+      case SCALE_PHRYGIAN:       return PHRYGIAN_INTERVALS;
+      case SCALE_LYDIAN:         return LYDIAN_INTERVALS;
+      case SCALE_MIXOLYDIAN:     return MIXOLYDIAN_INTERVALS;
+      case SCALE_AEOLIAN:        return AEOLIAN_INTERVALS;
+      case SCALE_LOCRIAN:        return LOCRIAN_INTERVALS;
+      case SCALE_HARMONIC_MINOR: return HARM_MIN_INTERVALS;
+      case SCALE_MELODIC_MINOR:  return MELO_MIN_INTERVALS;
+      default:                   return IONIAN_INTERVALS;
+    }
+  };
+
+  const uint8_t* scale = getIntervals(currentScale);
   int root = rootNote + scale[degree];
+
+  // Determine triad quality by inspecting 1-3-5 of the current scale at this degree
+  auto triadFromScale = [&](int deg, const int* &intervals, int &size, const char* &name) {
+    int d = deg % 7; if (d < 0) d += 7;
+    int third = scale[(d + 2) % 7];
+    int fifth = scale[(d + 4) % 7];
+    int thirdInt = (third - scale[d] + 12) % 12;
+    int fifthInt = (fifth - scale[d] + 12) % 12;
+    if (thirdInt == 4 && fifthInt == 7) { intervals = CHORD_MAJ; size = 3; name = "Maj"; }
+    else if (thirdInt == 3 && fifthInt == 7) { intervals = CHORD_MIN; size = 3; name = "Min"; }
+    else if (thirdInt == 3 && fifthInt == 6) { intervals = CHORD_DIM; size = 3; name = "Dim"; }
+    else if (thirdInt == 4 && fifthInt == 8) { intervals = CHORD_AUG; size = 3; name = "Aug"; }
+    else { intervals = CHORD_MIN; size = 3; name = "Min"; } // fallback
+  };
+
+  const int* triad = nullptr; int triadSize = 0; const char* triadName = "";
+  triadFromScale(degree, triad, triadSize, triadName);
   
   // Determine inversion to use
   int inversionToUse = chordInversions[degree];
@@ -71,8 +107,8 @@ void playChordForDegree(int degree) {
         int highestNote = 0;
         
         // Calculate actual notes for this combination
-        for (int i = 0; i < 3; i++) {
-          int testNote = testRoot + CHORD_MAJ[i];
+        for (int i = 0; i < triadSize; i++) {
+          int testNote = testRoot + triad[i];
           if (i < testInv) testNote += 12;
           if (testNote < lowestNote) lowestNote = testNote;
           if (testNote > highestNote) highestNote = testNote;
@@ -106,7 +142,7 @@ void playChordForDegree(int degree) {
     // Apply the best octave shift to the root
     root = root + (bestOctave * 12);
     inversionToUse = bestInversion;
-    currentInversion = inversionToUse;
+  currentInversion = inversionToUse;
     
     Serial.print("Auto-voicing: degree=");
     Serial.print(degree);
@@ -120,20 +156,9 @@ void playChordForDegree(int degree) {
     // Use the stored inversion for this degree
     currentInversion = inversionToUse;
   }
-  
-  if (minorScale) {
-    switch(degree) {
-      case 0: playChord(root, CHORD_MIN, 3, "Min"); break;
-      case 2: playChord(root, CHORD_MAJ, 3, "Maj"); break;
-      default: playChord(root, CHORD_MIN, 3, "Min"); break;
-    }
-  } else {
-    switch(degree) {
-      case 0: case 3: case 4: playChord(root, CHORD_MAJ, 3, "Maj"); break;
-      case 1: case 2: case 5: playChord(root, CHORD_MIN, 3, "Min"); break;
-      case 6: playChord(root, CHORD_DIM, 3, "Dim"); break;
-    }
-  }
+
+  // Play triad determined by current scale
+  playChord(root, triad, triadSize, String(triadName));
   
   // Update last played note for voice leading
   if (currentChord.size > 0) {
@@ -171,15 +196,40 @@ void playChord(int root, const int* intervals, int size, String name) {
   // Determine scale degree by matching root offset to current scale intervals
   int interval = (root - rootNote) % 12;
   if (interval < 0) interval += 12;
-  const int* scale = minorScale ? MINOR_SCALE : MAJOR_SCALE;
+  const uint8_t* scale = nullptr;
+  switch (currentScale) {
+    case SCALE_IONIAN: scale = IONIAN_INTERVALS; break;
+    case SCALE_DORIAN: scale = DORIAN_INTERVALS; break;
+    case SCALE_PHRYGIAN: scale = PHRYGIAN_INTERVALS; break;
+    case SCALE_LYDIAN: scale = LYDIAN_INTERVALS; break;
+    case SCALE_MIXOLYDIAN: scale = MIXOLYDIAN_INTERVALS; break;
+    case SCALE_AEOLIAN: scale = AEOLIAN_INTERVALS; break;
+    case SCALE_LOCRIAN: scale = LOCRIAN_INTERVALS; break;
+    case SCALE_HARMONIC_MINOR: scale = HARM_MIN_INTERVALS; break;
+    case SCALE_MELODIC_MINOR: scale = MELO_MIN_INTERVALS; break;
+    default: scale = IONIAN_INTERVALS; break;
+  }
   int degree = -1;
   for (int i = 0; i < 7; i++) {
     if (scale[i] == interval) { degree = i; break; }
   }
-  // Roman numeral helper (basic mapping)
-  const char* romansMajor[7] = {"I","II","III","IV","V","VI","VII"};
-  const char* romansMinor[7] = {"i","ii","iii","iv","v","vi","vii"};
-  const char* rn = (degree >= 0) ? (minorScale ? romansMinor[degree] : romansMajor[degree]) : "?";
+  // Roman numeral helper based on triad quality
+  auto romanFor = [&](int deg) -> const char* {
+    // recompute triad quality for logging
+    int d = deg % 7; if (d < 0) d += 7;
+    int third = scale[(d + 2) % 7];
+    int fifth = scale[(d + 4) % 7];
+    int thirdInt = (third - scale[d] + 12) % 12;
+    int fifthInt = (fifth - scale[d] + 12) % 12;
+    static const char* R_UP[7] = {"I","II","III","IV","V","VI","VII"};
+    static const char* R_LO[7] = {"i","ii","iii","iv","v","vi","vii"};
+    if (thirdInt == 4 && fifthInt == 7) return R_UP[d];
+    if (thirdInt == 3 && fifthInt == 7) return R_LO[d];
+    if (thirdInt == 3 && fifthInt == 6) return "vii°"; // diminished
+    if (thirdInt == 4 && fifthInt == 8) return "III+"; // rough indicator for aug
+    return R_UP[d];
+  };
+  const char* rn = (degree >= 0) ? romanFor(degree) : "?";
 
   // Log chord details: name, degree, inversion, root and notes
   Serial.print("Playing chord: ");
@@ -242,12 +292,14 @@ void setCurrentRootNote(int newRoot) {
   rootNote = BASE_NOTE + offset;
 }
 
-bool isMinorScale() {
-  return minorScale;
-}
-
-void setMinorScale(bool isMinor) {
-  minorScale = isMinor;
+ScaleType getScaleType() { return currentScale; }
+void setScaleType(ScaleType type) { currentScale = type; }
+void cycleScaleType(int step) {
+  int t = (int)currentScale + step;
+  while (t < 0) t += (int)SCALE_COUNT;
+  t %= (int)SCALE_COUNT;
+  currentScale = (ScaleType)t;
+  Serial.print("Scale: "); Serial.println(getCurrentScaleName());
 }
 
 void setCurrentInversion(int inversion) {
@@ -322,4 +374,19 @@ void toggleAutoVoicingMode() {
   autoVoicingMode = !autoVoicingMode;
   Serial.print("Auto-voicing mode: ");
   Serial.println(autoVoicingMode ? "ON" : "OFF");
+}
+
+const char* getCurrentScaleName() {
+  switch (currentScale) {
+    case SCALE_IONIAN: return "Ionian";
+    case SCALE_DORIAN: return "Dorian";
+    case SCALE_PHRYGIAN: return "Phrygian";
+    case SCALE_LYDIAN: return "Lydian";
+    case SCALE_MIXOLYDIAN: return "Mixolyd";
+    case SCALE_AEOLIAN: return "Aeolian";
+    case SCALE_LOCRIAN: return "Locrian";
+    case SCALE_HARMONIC_MINOR: return "HarmMin";
+    case SCALE_MELODIC_MINOR: return "MelMin";
+    default: return "Ionian";
+  }
 }
