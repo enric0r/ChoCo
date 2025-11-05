@@ -340,6 +340,48 @@ void handleJoystick(int x, int y) {
   int dx = dirFromAxis(x);
   int dy = dirFromAxis(y);
 
+  // Check if C modifier is held for octave change mode
+  bool cHeld = isModifierCHeld();
+  
+  // Track octave change state
+  static int lastOctaveDx = 0;
+  static unsigned long lastOctaveChangeTime = 0;
+  
+  // Helper to update joystick tracking state
+  auto updateJoystickState = [&]() {
+    lastDx = dx;
+    lastDy = dy;
+    lastJoystickMoveTime = millis();
+  };
+  
+  // If C is held and joystick moved left/right, change octave
+  if (cHeld && dx != 0 && dy == 0) {
+    // Only change on direction change to avoid repeats
+    if (dx != lastOctaveDx && (millis() - lastOctaveChangeTime >= JOYSTICK_GRACE_PERIOD)) {
+      if (dx < 0) {
+        decrementOctave();
+        showStatus(String("Octave: ") + getOctaveOffset(), 600);
+      } else if (dx > 0) {
+        incrementOctave();
+        showStatus(String("Octave: ") + getOctaveOffset(), 600);
+      }
+      lastOctaveDx = dx;
+      lastOctaveChangeTime = millis();
+      updateJoystickState();
+      return; // Don't apply chord variation when changing octave
+    }
+    // If joystick is still in the same direction, just return without processing
+    if (dx == lastOctaveDx) {
+      updateJoystickState();
+      return;
+    }
+  } else {
+    // Reset octave change tracking only when C is not held
+    if (!cHeld) {
+      lastOctaveDx = 0;
+    }
+  }
+
   // If direction changed, apply variation. Apply immediately on first move out of center;
   // otherwise respect the (reduced) grace period to avoid jitter.
   bool changed = (dx != lastDx || dy != lastDy);

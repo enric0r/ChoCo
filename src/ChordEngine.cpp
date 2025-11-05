@@ -34,6 +34,8 @@ static int chordInversions[7] = {0, 0, 0, 0, 0, 0, 0};
 // Auto-voicing mode: automatically selects inversions to keep within octave
 static bool autoVoicingMode = AUTO_VOICING_ENABLED_DEFAULT;
 static int lastPlayedNote = BASE_NOTE; // Track last note for voice leading
+// Octave offset: adjusts all chords up/down by octaves (-2 to +2)
+static int octaveOffset = 0;
 // Chord history: circular buffer storing last 6 chords
 #define CHORD_HISTORY_SIZE 6
 static String chordHistory[CHORD_HISTORY_SIZE];
@@ -75,6 +77,9 @@ void playChordForDegree(int degree) {
 
   const uint8_t* scale = getIntervals(currentScale);
   int root = rootNote + scale[degree];
+  
+  // Apply octave offset
+  root += (octaveOffset * 12);
 
   // Determine triad quality by inspecting 1-3-5 of the current scale at this degree
   auto triadFromScale = [&](int deg, const int* &intervals, int &size, const char* &name) {
@@ -194,6 +199,9 @@ void playChordForDegreeWithIntervals(int degree, const int* forcedIntervals, int
 
   const uint8_t* scale = getIntervals(currentScale);
   int root = rootNote + scale[degree];
+  
+  // Apply octave offset
+  root += (octaveOffset * 12);
 
   // Determine inversion to use
   int inversionToUse = chordInversions[degree];
@@ -469,6 +477,27 @@ void toggleAutoVoicingMode() {
   autoVoicingMode = !autoVoicingMode;
   Serial.print("Auto-voicing mode: ");
   Serial.println(autoVoicingMode ? "ON" : "OFF");
+}
+
+int getOctaveOffset() {
+  return octaveOffset;
+}
+
+void setOctaveOffset(int offset) {
+  // Clamp to reasonable range (-2 to +2 octaves)
+  if (offset < -2) offset = -2;
+  if (offset > 2) offset = 2;
+  octaveOffset = offset;
+  Serial.print("Octave offset: ");
+  Serial.println(octaveOffset);
+}
+
+void incrementOctave() {
+  setOctaveOffset(octaveOffset + 1);
+}
+
+void decrementOctave() {
+  setOctaveOffset(octaveOffset - 1);
 }
 
 const char* getCurrentScaleName() {

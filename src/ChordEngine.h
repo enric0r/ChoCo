@@ -61,6 +61,12 @@ bool isAutoVoicingMode();
 void setAutoVoicingMode(bool enabled);
 void toggleAutoVoicingMode();
 
+// Octave offset functions
+int getOctaveOffset();
+void setOctaveOffset(int offset);
+void incrementOctave();
+void decrementOctave();
+
 // Chord history functions
 void printChordHistory();
 int getChordHistoryCount();
