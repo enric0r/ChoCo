@@ -168,17 +168,15 @@ void startArpeggio(const int* notes, int noteCount) {
   
   // Handle strum patterns (play all notes in quick succession)
   if (currentPattern == ARP_STRUM_UP || currentPattern == ARP_STRUM_DOWN) {
-    const int STRUM_DELAY = 20;  // ms between notes
-    
     if (currentPattern == ARP_STRUM_UP) {
       for (int i = 0; i < arpNoteCount; i++) {
         midiNoteOn(arpNotes[i], 100);
-        delay(STRUM_DELAY);
+        delay(STRUM_DELAY_MS);
       }
     } else {  // STRUM_DOWN
       for (int i = arpNoteCount - 1; i >= 0; i--) {
         midiNoteOn(arpNotes[i], 100);
-        delay(STRUM_DELAY);
+        delay(STRUM_DELAY_MS);
       }
     }
     

@@ -3,7 +3,7 @@
 
 // Internal state
 static ClockMode clockMode = CLOCK_INTERNAL;
-static float currentBPM = 120.0f;  // Default 120 BPM
+static float currentBPM = DEFAULT_BPM;  // Use constant from Config.h
 static unsigned long lastBeatTime = 0;
 static unsigned long lastTapTime = 0;
 static int tapCount = 0;
