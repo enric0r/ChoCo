@@ -37,10 +37,15 @@ Physical mapping (top → bottom):
 - 0  2  4  6
 
 Behavior
-- Digits 0..7: playChordForDegree(degree)
+- Digits 0..6: playChordForDegree(degree)
+- 7: toggle arpeggiator on/off
 - A: increment root note (wraps across octaves)
 - B: toggle scale (Major/Minor)
-- C: cycle inversion (0..2)
+- C: modifier key (used in combinations)
+- C + 0: Panic (All Notes Off)
+- C + 1-6: cycle inversion for that degree
+- C + A: tap tempo (tap multiple times to set BPM)
+- C + B: show chord history
 - Release: a brief debounce (~50 ms), then stopCurrentChord()
 
 Wiring arrays (see `src/Controls.cpp`)
@@ -65,6 +70,38 @@ Responsiveness
 - First movement out of center applies immediately; subsequent changes use a short grace period
 - Grace period: `JOYSTICK_GRACE_PERIOD` = 120 ms (see `src/Config.h`)
 - Button polarity: `JOYSTICK_BUTTON_ACTIVE_LOW` (1 = active‑low)
+
+## Clock and Timing
+
+ChoCo includes an internal clock system with the following features:
+
+- **Tap Tempo**: Hold C and press A multiple times to set BPM (40-240 range)
+- **Internal Clock**: Runs at the set BPM (default 120 BPM)
+- **Beat Indicator**: Visual metronome on OLED display shows current beat (4/4 time)
+- **MIDI Clock Sync**: Can sync to incoming MIDI clock messages (24 ppqn)
+- **Quantization**: Support for quantizing chord changes to beat or bar boundaries
+
+## Arpeggiator and Strums
+
+The arpeggiator plays chord notes in sequence, synchronized to the internal clock:
+
+- **Toggle**: Press key 7 to enable/disable arpeggiator
+- **Patterns**: UP, DOWN, UP_DOWN, RANDOM, STRUM_UP, STRUM_DOWN
+- **Note Division**: 16th notes by default (configurable)
+- **Sync**: All arpeggios and strums sync to the internal clock BPM
+- **Strum Patterns**: Quick successive note triggering for guitar-like effects
+
+Configuration in `src/Config.h`:
+- `DEFAULT_BPM` = 120.0
+- `ARP_DEFAULT_DIVISION` = 4 (16th notes)
+- `STRUM_DELAY_MS` = 20 (delay between strum notes)
+
+## Panic Function
+
+- **C + 0**: All Notes Off (MIDI panic)
+  - Sends CC 123 (All Notes Off) on all 16 MIDI channels
+  - Sends Note Off for all 128 MIDI notes as fallback
+  - Stops current chord and arpeggio
 
 ## USB MIDI and naming
 
@@ -99,6 +136,10 @@ CLI (optional)
   - `JOYSTICK_GRACE_PERIOD` = 120
 - Logging
   - `LOG_CHORDS` = 1 (verbose chord start/stop logs)
+- Clock and Timing
+  - `DEFAULT_BPM` = 120.0
+  - `ARP_DEFAULT_DIVISION` = 4 (16th notes)
+  - `STRUM_DELAY_MS` = 20
 - USB descriptors (see previous section)
 
 ## Project structure
@@ -107,6 +148,8 @@ CLI (optional)
   - `main.cpp` — main loop, input polling, release handling
   - `Controls.cpp/.h` — keypad scan, joystick mapping, variations
   - `ChordEngine.cpp/.h` — chord generation, inversion, state
+  - `Clock.cpp/.h` — timing, tap tempo, MIDI clock sync
+  - `Arpeggiator.cpp/.h` — arpeggio and strum patterns
   - `Display.cpp/.h` — OLED status display
   - `MIDI.cpp/.h` — USB MIDI plumbing (TinyUSB)
   - `Config.h/.cpp` — pins, flags, timing, descriptors

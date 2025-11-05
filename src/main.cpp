@@ -129,6 +129,18 @@ void loop() {
             printChordHistory();
             showStatus("History", 600);
         }
+        // Tap tempo: hold C and press 'A'
+        else if (cButtonHeld && key == 'A') {
+            Serial.println("Tap tempo");
+            handleTapTempo();
+        }
+        // Toggle arpeggiator: press 7
+        else if (!cButtonHeld && key == '7') {
+            setArpeggiatorEnabled(!isArpeggiatorEnabled());
+            showStatus(String("Arp: ") + (isArpeggiatorEnabled() ? "ON" : "OFF"), 500);
+            Serial.print("Arpeggiator: ");
+            Serial.println(isArpeggiatorEnabled() ? "ON" : "OFF");
+        }
         // Function keys (A, B) work normally when C not held
         else if (!cButtonHeld && (key == 'A' || key == 'B')) {
             Serial.print("Function key press | key="); Serial.println(key);
