@@ -65,6 +65,16 @@ Variations apply only when a chord is currently active:
 - Down‑Right: Min9
 - Down‑Left: Dim
 
+### Octave Change
+
+While holding the C modifier key, you can change the octave by moving the joystick left or right:
+
+- Hold C + Joystick Left: Decrease octave (-1)
+- Hold C + Joystick Right: Increase octave (+1)
+- Range: -2 to +2 octaves
+- The current octave offset is displayed on screen when changed
+- The octave offset applies to all chords until changed again
+
 Responsiveness
 - Deadzone tightened: X/Y < 350 ⇒ −1, > 650 ⇒ +1, otherwise 0 (see `dirFromAxis`)
 - First movement out of center applies immediately; subsequent changes use a short grace period
@@ -173,8 +183,27 @@ CLI (optional)
   - Confirm OLED power (3.3V), I2C pins (GP14/GP15), and that `I2C_PORT` is set to 1
 
 ## Roadmap / ideas
+- **Performance/playability**:
+  - Octave shift: hold A + joystick up/down to transpose root by ±12; show “Oct ±1”.
+  - Strum/arp modes: toggleable; set direction (up/down), speed via joystick Y, width via X.
+  - Latch/sustain: toggle to keep last chord on until next press or pedal off.
+  - Single-note lead layer: hold a modifier to send scale notes on a separate MIDI channel.
+- **Harmony/Voicing**:
+  - Borrowed chords (modal interchange): toggle to access bIII, bVI, bVII in major.
+  - Secondary dominants: hold C + press a degree to play its V/ (e.g., V/ii).
+  - Guide-tones mode: 3rds/7ths only for tighter jazz voicings.
+  - Spread voicings: “open” triads or add 10ths; toggleable.
+- **Scales/modes**:
+  - Add pentatonic/blues; map degrees 0–4; long-press B to switch “pentatonic layout”.
+- **Bass and split**:
+  - Split MIDI channels: send chords on Ch1, bass on Ch2; per-part velocity/CC.
+  - Smart bass patterns: root-only, octave-doubling, or walking (scale-aware).
+- **Timing/clock**:
+  - Tap tempo + internal clock; sync arps/strums.
+  - MIDI Clock sync in; quantize chord changes to beat/bar.
+- **Controls/UX**:
+  - Panic/All Notes Off (C + 0)
 
-- On‑screen hints for current variation and inversion
 ---
 
 Made with ❤️ for quick harmony exploration. Plug it in, press a key, and jam.
