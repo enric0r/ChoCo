@@ -130,8 +130,27 @@ CLI (optional)
   - Confirm OLED power (3.3V), I2C pins (GP14/GP15), and that `I2C_PORT` is set to 1
 
 ## Roadmap / ideas
+- **Performance/playability**:
+  - Octave shift: hold A + joystick up/down to transpose root by ±12; show “Oct ±1”.
+  - Strum/arp modes: toggleable; set direction (up/down), speed via joystick Y, width via X.
+  - Latch/sustain: toggle to keep last chord on until next press or pedal off.
+  - Single-note lead layer: hold a modifier to send scale notes on a separate MIDI channel.
+- **Harmony/Voicing**:
+  - Borrowed chords (modal interchange): toggle to access bIII, bVI, bVII in major.
+  - Secondary dominants: hold C + press a degree to play its V/ (e.g., V/ii).
+  - Guide-tones mode: 3rds/7ths only for tighter jazz voicings.
+  - Spread voicings: “open” triads or add 10ths; toggleable.
+- **Scales/modes**:
+  - Add pentatonic/blues; map degrees 0–4; long-press B to switch “pentatonic layout”.
+- **Bass and split**:
+  - Split MIDI channels: send chords on Ch1, bass on Ch2; per-part velocity/CC.
+  - Smart bass patterns: root-only, octave-doubling, or walking (scale-aware).
+- **Timing/clock**:
+  - Tap tempo + internal clock; sync arps/strums.
+  - MIDI Clock sync in; quantize chord changes to beat/bar.
+- **Controls/UX**:
+  - Panic/All Notes Off (C + 0)
 
-- On‑screen hints for current variation and inversion
 ---
 
 Made with ❤️ for quick harmony exploration. Plug it in, press a key, and jam.
