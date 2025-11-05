@@ -207,7 +207,10 @@ unsigned long timeUntilNextBeat() {
 unsigned long timeUntilNextBar() {
   unsigned long beatTime = timeUntilNextBeat();
   int beatsRemaining = 4 - currentBeatInBar;
-  if (beatsRemaining == 4) beatsRemaining = 0; // Already at start of bar
+  if (beatsRemaining == 4 || beatsRemaining == 0) {
+    // Already at start of bar
+    return beatTime;
+  }
   
   unsigned long beatInterval = (unsigned long)((60000.0f / currentBPM));
   return beatTime + (beatInterval * (beatsRemaining - 1));

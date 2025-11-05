@@ -70,7 +70,7 @@ void loop() {
             showStatus("PANIC!", 800);
         }
         // If we're in edit mode (C held) and a chord key (0-6) is pressed
-        else if (cButtonHeld && key >= '1' && key <= '6') {
+        else if (cButtonHeld && key >= '0' && key <= '6') {
             int degree = key - '0';
             Serial.print("Inversion-edit key press | degree="); Serial.print(degree);
             Serial.print(" | before inv="); Serial.println(getInversionForDegree(degree));
