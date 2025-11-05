@@ -43,3 +43,19 @@ void midiSendTestSequence() {
         delay(5);
     }
 }
+
+void midiPanic() {
+    // Send All Notes Off (CC 123) on all 16 MIDI channels
+    for (byte channel = 0; channel < 16; channel++) {
+        uint8_t all_notes_off[3] = {0xB0 | channel, 123, 0};
+        usb_midi.write(all_notes_off, 3);
+    }
+    
+    // Also send Note Off for all possible notes on channel 1 as a fallback
+    for (byte note = 0; note < 128; note++) {
+        midiNoteOff(note, 0);
+    }
+    
+    flushMIDI();
+    Serial.println("MIDI PANIC: All notes off");
+}

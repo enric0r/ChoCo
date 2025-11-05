@@ -1,5 +1,6 @@
 #include "ChordEngine.h"
 #include "Display.h" // for getNoteName()
+#include "Arpeggiator.h"
 
 // Interval sets for supported scales (7-note)
 static const uint8_t IONIAN_INTERVALS[7]   = {0, 2, 4, 5, 7, 9, 11}; // Major
@@ -34,6 +35,10 @@ static int chordInversions[7] = {0, 0, 0, 0, 0, 0, 0};
 // Auto-voicing mode: automatically selects inversions to keep within octave
 static bool autoVoicingMode = AUTO_VOICING_ENABLED_DEFAULT;
 static int lastPlayedNote = BASE_NOTE; // Track last note for voice leading
+
+// Quantization mode
+static QuantizeMode quantizeMode = QUANTIZE_OFF;
+
 // Chord history: circular buffer storing last 6 chords
 #define CHORD_HISTORY_SIZE 6
 static String chordHistory[CHORD_HISTORY_SIZE];
@@ -350,6 +355,11 @@ void playChord(int root, const int* intervals, int size, String name) {
   chordHistory[historyWriteIndex] = historyEntry;
   historyWriteIndex = (historyWriteIndex + 1) % CHORD_HISTORY_SIZE;
   if (historyCount < CHORD_HISTORY_SIZE) historyCount++;
+  
+  // Start arpeggiator if enabled
+  if (isArpeggiatorEnabled()) {
+    startArpeggio(currentChord.notes, currentChord.size);
+  }
 }
 
 void stopCurrentChord() {
@@ -359,6 +369,9 @@ void stopCurrentChord() {
     Serial.println(currentChord.name);
   }
 #endif
+  
+  // Stop arpeggiator
+  stopArpeggio();
   
   // Stop bass note if active
   if (bassNote >= 0) {
@@ -520,3 +533,24 @@ int getChordHistoryDegree(int index) {
   int arrayIndex = (historyWriteIndex - 1 - index + CHORD_HISTORY_SIZE) % CHORD_HISTORY_SIZE;
   return chordHistoryDegrees[arrayIndex];
 }
+
+void setQuantizeMode(QuantizeMode mode) {
+  quantizeMode = mode;
+  const char* modeNames[] = {"OFF", "BEAT", "BAR"};
+  Serial.print("Quantize mode: ");
+  Serial.println(modeNames[mode]);
+}
+
+QuantizeMode getQuantizeMode() {
+  return quantizeMode;
+}
+
+void getCurrentChordNotes(int* notes, int* count) {
+  if (notes == nullptr || count == nullptr) return;
+  
+  *count = currentChord.size;
+  for (int i = 0; i < currentChord.size; i++) {
+    notes[i] = currentChord.notes[i];
+  }
+}
+

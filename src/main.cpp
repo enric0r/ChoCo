@@ -3,6 +3,8 @@
 #include "Display.h"
 #include "ChordEngine.h"
 #include "Controls.h"
+#include "Clock.h"
+#include "Arpeggiator.h"
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 
@@ -17,6 +19,12 @@ void setup() {
     setupControls();
     Serial.println("Controls initialized");
     
+    setupClock();
+    Serial.println("Clock initialized");
+    
+    setupArpeggiator();
+    Serial.println("Arpeggiator initialized");
+    
     setupDisplay();
     Serial.println("Display initialized");
     
@@ -25,6 +33,12 @@ void setup() {
 }
 
 void loop() {
+    // Update clock system
+    updateClock();
+    
+    // Update arpeggiator
+    updateArpeggiator();
+    
     // Read keypad using custom scanner
     static char activeKey = NO_KEY;               // last key whose chord we started
     static unsigned long releaseStart = 0;        // when we first saw no-key
@@ -47,8 +61,16 @@ void loop() {
     
     // Handle key presses
     if (key != NO_KEY) {
+        // PANIC: C + 0 = All Notes Off
+        if (cButtonHeld && key == '0') {
+            Serial.println("PANIC triggered (C + 0)");
+            midiPanic();
+            stopCurrentChord();
+            activeKey = NO_KEY;
+            showStatus("PANIC!", 800);
+        }
         // If we're in edit mode (C held) and a chord key (0-6) is pressed
-        if (cButtonHeld && key >= '0' && key <= '6') {
+        else if (cButtonHeld && key >= '1' && key <= '6') {
             int degree = key - '0';
             Serial.print("Inversion-edit key press | degree="); Serial.print(degree);
             Serial.print(" | before inv="); Serial.println(getInversionForDegree(degree));

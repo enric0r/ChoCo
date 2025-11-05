@@ -12,5 +12,7 @@ void midiNoteOff(byte pitch, byte velocity);
 void flushMIDI();
 // Optional: send a short test so hosts can verify MIDI reception
 void midiSendTestSequence();
+// Send All Notes Off (panic) - stops all notes on all channels
+void midiPanic();
 
 #endif

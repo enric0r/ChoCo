@@ -1,6 +1,8 @@
 #include "Controls.h"
 #include "Display.h"
 #include "ChordEngine.h"
+#include "Clock.h"
+#include "Arpeggiator.h"
 
 // Matrix is wired column-to-row (columns are inputs, rows are outputs)
 // Keys mapping restored to the original working layout
@@ -370,4 +372,11 @@ void primeJoystickDirection(int dx, int dy) {
   g_lastDx = dx;
   g_lastDy = dy;
   lastJoystickMoveTime = millis();
+}
+
+void handleTapTempo() {
+  tapTempo();
+  showStatus(String("BPM: ") + String((int)getBPM()), 500);
+}
+
 }

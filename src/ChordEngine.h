@@ -67,6 +67,19 @@ int getChordHistoryCount();
 String getChordHistoryEntry(int index); // 0 = most recent
 int getChordHistoryDegree(int index);   // Get degree number for display (0-6, or -1 if unknown)
 
+// Quantization mode
+enum QuantizeMode {
+  QUANTIZE_OFF,    // No quantization - immediate chord changes
+  QUANTIZE_BEAT,   // Quantize to next beat
+  QUANTIZE_BAR     // Quantize to next bar
+};
+
+void setQuantizeMode(QuantizeMode mode);
+QuantizeMode getQuantizeMode();
+
+// Get current chord notes for arpeggiator
+void getCurrentChordNotes(int* notes, int* count);
+
 extern const int CHORD_MAJ[];
 extern const int CHORD_MIN[];
 extern const int CHORD_DIM[];

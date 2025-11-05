@@ -44,6 +44,14 @@
 // Lower value makes the joystick feel more responsive.
 #define JOYSTICK_GRACE_PERIOD 120 // ms (was 300)
 
+// Clock and timing configuration
+#define DEFAULT_BPM 120.0f
+#define TAP_TEMPO_BUTTON_PIN 7  // Use joystick button for tap tempo by default
+
+// Arpeggiator configuration
+#define ARP_DEFAULT_DIVISION 4  // Default to 16th notes
+#define STRUM_DELAY_MS 20       // Delay between notes in strum patterns
+
 // Timing constants
 #define SPLASH_SCREEN_DURATION 2000
 #define STATUS_MESSAGE_DURATION 1000

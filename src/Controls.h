@@ -18,6 +18,9 @@ void setupControls();
 void handleKeyPress(char key);
 void handleJoystick(int x, int y);
 
+// Handle tap tempo (call when tap tempo button is pressed)
+void handleTapTempo();
+
 // Seed the joystick direction state to avoid immediate re-application
 // of the same variation right after starting a chord with a held joystick.
 void primeJoystickDirection(int dx, int dy);
