@@ -420,5 +420,3 @@ void handleTapTempo() {
   tapTempo();
   showStatus(String("BPM: ") + String((int)getBPM()), 500);
 }
-
-}

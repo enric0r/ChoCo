@@ -47,7 +47,7 @@ void midiSendTestSequence() {
 void midiPanic() {
     // Send All Notes Off (CC 123) on all 16 MIDI channels
     for (byte channel = 0; channel < 16; channel++) {
-        uint8_t all_notes_off[3] = {0xB0 | channel, 123, 0};
+        uint8_t all_notes_off[3] = {(uint8_t)(0xB0 | channel), 123, 0};
         usb_midi.write(all_notes_off, 3);
     }
     
