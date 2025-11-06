@@ -381,6 +381,12 @@ void stopCurrentChord() {
 }
 
 String getCurrentChordName() {
+  if (currentChord.size == 0) {
+    Serial.println("getCurrentChordName: No active chord");
+    return "";
+  }
+  Serial.print("getCurrentChordName: ");
+  Serial.println(currentChord.name);
   return currentChord.name;
 }
 
