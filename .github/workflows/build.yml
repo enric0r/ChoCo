@@ -1,10 +1,6 @@
 name: Build ChoCo MIDI Controller
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       publish_artifact:
@@ -12,6 +8,16 @@ on:
         required: false
         type: boolean
         default: false
+      create_release:
+        description: 'Create GitHub release'
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   build:
@@ -66,6 +72,37 @@ jobs:
         path: artifact/*
         retention-days: 30
     
+    - name: 🏷️ Create Release
+      if: success() && github.event.inputs.create_release == 'true' && github.event.inputs.release_tag != ''
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.event.inputs.release_tag }}
+        name: ChoCo MIDI Controller ${{ github.event.inputs.release_tag }}
+        body: |
+          ## ChoCo MIDI Controller Release
+          
+          ### 📦 Build Information
+          - **Commit**: ${{ github.sha }}
+          - **Branch**: ${{ github.ref_name }}
+          - **Build Date**: ${{ github.event.repository.updated_at }}
+          
+          ### 📥 Installation
+          1. Download `ChoCo-firmware.uf2`
+          2. Connect your Raspberry Pi Pico while holding BOOTSEL button
+          3. Copy the `.uf2` file to the RPI-RP2 drive
+          4. The device will automatically reboot with the new firmware
+          
+          ### 🎹 Features
+          See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for full documentation.
+        files: |
+          artifact/ChoCo-firmware.uf2
+          artifact/ChoCo-firmware.elf
+          artifact/ChoCo-firmware.bin
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
     - name: 📝 Generate build summary
       if: always()
       run: |
@@ -76,4 +113,7 @@ jobs:
         echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
         if [ -f ".pio/build/pico/firmware.uf2" ]; then
           echo "- **Firmware size**: $(stat -f%z .pio/build/pico/firmware.uf2 2>/dev/null || stat -c%s .pio/build/pico/firmware.uf2) bytes" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ "${{ github.event.inputs.create_release }}" == "true" ]; then
+          echo "- **Release**: ${{ github.event.inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
         fi
