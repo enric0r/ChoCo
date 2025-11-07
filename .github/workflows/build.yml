@@ -19,6 +19,9 @@ on:
         type: string
         default: ''
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
