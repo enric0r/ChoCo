@@ -77,7 +77,7 @@ jobs:
     
     - name: 🏷️ Create Release
       if: success() && github.event.inputs.create_release == 'true' && github.event.inputs.release_tag != ''
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ github.event.inputs.release_tag }}
         name: ChoCo MIDI Controller ${{ github.event.inputs.release_tag }}
