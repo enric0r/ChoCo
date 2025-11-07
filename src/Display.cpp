@@ -86,7 +86,6 @@ void updateDisplay() {
   
   // Create compact version for display (remove spaces, abbreviate)
   String displayName = chordName;
-  displayName.replace(" ", ""); // Remove spaces: "C Maj7/E" -> "CMaj7/E"
   
   if (shouldDebug) {
     Serial.print("updateDisplay() called | chord='");
