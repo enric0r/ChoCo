@@ -292,49 +292,34 @@ void handleJoystick(int x, int y) {
   unsigned long &lastIgnoreLog = g_lastIgnoreLog;
   unsigned long &lastBtnPressTime = g_lastBtnPressTime;
   int &btnPressCount = g_btnPressCount;
-
-  // Read joystick button
+  static unsigned long btnPressStartTime = 0;
+  static bool longPressHandled = false;
+  
   bool held = isJoyButtonHeld();
   if (held != lastBtnHeld) {
-    Serial.print("Joystick BTN: ");
-    Serial.println(held ? "PRESSED" : "RELEASED");
-    
-    // On button press
     if (held && !lastBtnHeld) {
-      unsigned long now = millis();
+      // Button just pressed
+      btnPressStartTime = millis();
+      longPressHandled = false;
+    } else if (!held && lastBtnHeld) {
+      // Button just released
+      unsigned long pressDuration = millis() - btnPressStartTime;
       
-      // Check for double-tap (within 500ms)
-      if (now - lastBtnPressTime < 500) {
-        btnPressCount++;
-        if (btnPressCount == 1) {
-          // Double tap detected - toggle auto-voicing
-          toggleAutoVoicingMode();
-          showStatus(String("AutoVoice: ") + (isAutoVoicingMode() ? "ON" : "OFF"), 800);
-          btnPressCount = 0;
-        }
-      } else {
-        // Single tap - toggle bass mode
-        btnPressCount = 0;
-      }
-      
-      lastBtnPressTime = now;
-    }
-    
-    // On button release after single tap
-    if (!held && lastBtnHeld) {
-      unsigned long now = millis();
-      if (btnPressCount == 0 && (now - lastBtnPressTime < 500)) {
-        // Wait a bit to see if it's a double tap
-        delay(200);
-        if (!isJoyButtonHeld()) {
-          // Still not pressed - it was a single tap
-          toggleBassMode();
-          showStatus(String("Bass: ") + (isBassMode() ? "ON" : "OFF"), 500);
-        }
+      if (!longPressHandled && pressDuration < 500) {
+        // Short press - toggle bass mode
+        toggleBassMode();
+        showStatus(String("Bass: ") + (isBassMode() ? "ON" : "OFF"), 500);
       }
     }
-    
     lastBtnHeld = held;
+  }
+  
+  // Check for long press while held
+  if (held && !longPressHandled && (millis() - btnPressStartTime > 1000)) {
+    // Long press detected - toggle auto-voicing
+    toggleAutoVoicingMode();
+    showStatus(String("AutoVoice: ") + (isAutoVoicingMode() ? "ON" : "OFF"), 800);
+    longPressHandled = true;
   }
 
   int dx = dirFromAxis(x);

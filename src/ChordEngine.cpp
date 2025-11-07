@@ -257,8 +257,8 @@ void playChord(int root, const int* intervals, int size, String name) {
   // Play bass note if bass mode is enabled
   if (bassMode) {
     bassNote = root + BASS_OCTAVE_OFFSET;
-    if (bassNote < 0) bassNote = 0; // Clamp to valid MIDI range
-    midiNoteOn(bassNote, 80); // Slightly lower velocity for bass
+    if (bassNote < 0) bassNote = 0;
+    midiNoteOn(bassNote, 80);
   }
   
   for(int i = 0; i < size; i++) {
@@ -271,10 +271,16 @@ void playChord(int root, const int* intervals, int size, String name) {
   }
   
   currentChord.size = size;
-  currentChord.root = root; // track the active chord's actual root
-  currentChord.name = name;
-  if (currentInversion > 0) {
-    currentChord.name += String(" ") + currentInversion + "inv";
+  currentChord.root = root;
+  
+  // Build chord name with slash notation for inversions
+  currentChord.name = getNoteName(root) + " " + name;
+  
+  // Add slash chord notation if inverted
+  if (currentInversion > 0 && size > 0) {
+    // Find the bass note (lowest note after inversion)
+    int bassNoteNumber = root + intervals[currentInversion % size];
+    currentChord.name += "/" + getNoteName(bassNoteNumber);
   }
 
 #if LOG_CHORDS
@@ -316,25 +322,33 @@ void playChord(int root, const int* intervals, int size, String name) {
   };
   const char* rn = (degree >= 0) ? romanFor(degree) : "?";
 
-  // Log chord details: name, degree, inversion, root and notes
+  // Log chord details with slash notation
   Serial.print("Playing chord: ");
   Serial.print(currentChord.name);
   Serial.print(" | Degree: ");
   Serial.print(degree >= 0 ? degree : -1);
   Serial.print(" ("); Serial.print(rn); Serial.print(")");
-  Serial.print(" | Inversion: ");
-  Serial.print(currentInversion);
   Serial.print(" | Root: ");
   Serial.print(getNoteName(root));
-  Serial.print(" (" ); Serial.print(root); Serial.print(")");
+  Serial.print(" ("); Serial.print(root); Serial.print(")");
+  
+  // Show inversion type
+  if (currentInversion > 0) {
+    Serial.print(" | Inv: ");
+    Serial.print(currentInversion);
+    Serial.print(" (bass: ");
+    Serial.print(getNoteName(root + intervals[currentInversion % size]));
+    Serial.print(")");
+  }
+  
   Serial.print(" | Notes: ");
   for (int i = 0; i < currentChord.size; i++) {
     if (i) Serial.print(", ");
     Serial.print(getNoteName(currentChord.notes[i]));
-    Serial.print(" (" ); Serial.print(currentChord.notes[i]); Serial.print(")");
+    Serial.print(" ("); Serial.print(currentChord.notes[i]); Serial.print(")");
   }
   if (bassNote >= 0) {
-    Serial.print(" | Bass: ");
+    Serial.print(" | Bass pedal: ");
     Serial.print(getNoteName(bassNote));
     Serial.print(" ("); Serial.print(bassNote); Serial.print(")");
   }
@@ -342,7 +356,7 @@ void playChord(int root, const int* intervals, int size, String name) {
 #endif
 
   // Add to history (store root note name + chord name + roman numeral if available)
-  String historyEntry = getNoteName(root) + " " + currentChord.name;
+  String historyEntry = currentChord.name;
   #if LOG_CHORDS
   if (degree >= 0) {
     historyEntry += " (";
