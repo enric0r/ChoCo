@@ -1,0 +1,9 @@
+{
+  "name": "Controls",
+  "version": "1.0.0",
+  "description": "ChoCo input controls (keypad and joystick)",
+  "dependencies": {
+    "Config": "*",
+    "Display": "*"
+  }
+}

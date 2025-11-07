@@ -1,0 +1,11 @@
+{
+  "name": "Display",
+  "version": "1.0.0",
+  "description": "ChoCo display handling",
+  "dependencies": {
+    "Config": "*",
+    "ChordEngine": "*",
+    "adafruit/Adafruit GFX Library": "^1.12.3",
+    "adafruit/Adafruit SSD1306": "^2.5.9"
+  }
+}

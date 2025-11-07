@@ -1,0 +1,9 @@
+{
+  "name": "ChordEngine",
+  "version": "1.0.0",
+  "description": "ChoCo chord generation engine",
+  "dependencies": {
+    "Config": "*",
+    "MIDI": "*"
+  }
+}
