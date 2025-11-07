@@ -343,11 +343,11 @@ void handleJoystick(int x, int y) {
   if (cHeld && dx != 0 && dy == 0) {
     // Only change on direction change to avoid repeats
     if (dx != lastOctaveDx && (millis() - lastOctaveChangeTime >= JOYSTICK_GRACE_PERIOD)) {
-      if (dx < 0) {
-        decrementOctave();
-        showStatus(String("Octave: ") + getOctaveOffset(), 600);
-      } else if (dx > 0) {
+      if (dx > 0) {
         incrementOctave();
+        showStatus(String("Octave: ") + getOctaveOffset(), 600);
+      } else if (dx < 0) {
+        decrementOctave();
         showStatus(String("Octave: ") + getOctaveOffset(), 600);
       }
       lastOctaveDx = dx;

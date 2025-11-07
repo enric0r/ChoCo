@@ -64,7 +64,7 @@ void loop() {
             Serial.print("Play key press | key="); Serial.print(key);
 
             // If joystick is held in a direction, apply the mapped variation immediately
-            int xNow = analogRead(JOYSTICK_X);
+            int xNow = 1023 - analogRead(JOYSTICK_X);  // Inverted because joystick is mounted upside down
             int yNow = analogRead(JOYSTICK_Y);
             auto dirFromAxisQuick = [](int v){ if (v < 350) return -1; if (v > 650) return 1; return 0; };
             int dx = dirFromAxisQuick(xNow);
@@ -115,7 +115,7 @@ void loop() {
     }
     
     // Read joystick
-    int xValue = analogRead(JOYSTICK_X);
+    int xValue = 1023 - analogRead(JOYSTICK_X);  // Inverted because joystick is mounted upside down
     int yValue = analogRead(JOYSTICK_Y);
     handleJoystick(xValue, yValue);
     
