@@ -54,7 +54,7 @@
 #endif
 
 #ifndef SCREENSAVER_ANIMATION_INTERVAL_MS
-#define SCREENSAVER_ANIMATION_INTERVAL_MS 2000  // Animation frame change interval
+#define SCREENSAVER_ANIMATION_INTERVAL_MS 100  // Animation frame update interval (faster = smoother bouncing)
 #endif
 
 extern const int MAJOR_SCALE[];

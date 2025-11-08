@@ -98,12 +98,8 @@ void updateScreensaver() {
     static int dx = 2;
     static int dy = 1;
     
-    // Alternate between the two logo frames
-    if (screensaverFrame % 2 == 0) {
-      display.drawBitmap(x, y, logo_1, 117, 42, SSD1306_WHITE);
-    } else {
-      display.drawBitmap(x, y, logo_2, 117, 42, SSD1306_WHITE);
-    }
+    // Draw the logo (using only logo_1)
+    display.drawBitmap(x, y, logo_1, 117, 42, SSD1306_WHITE);
     
     // Update position for bouncing effect
     x += dx;
@@ -145,7 +141,6 @@ void drawSplashScreen() {
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
-  display.print("Ready");
   display.display();
   delay(500);
   
