@@ -10,6 +10,11 @@ static const unsigned char PROGMEM logo_2[] = {0x00,0x00,0x00,0x00,0x00,0x00,0x0
 static String g_statusMessage;
 static unsigned long g_statusUntil = 0;
 
+// Screensaver state
+static unsigned long lastActivityTime = 0;
+static bool screensaverActive = false;
+static int screensaverFrame = 0;
+
 // Simple I2C scanner to help debug display issues on the selected TwoWire bus
 static void scanI2C(TwoWire &tw) {
   Serial.println(F("\nScanning I2C bus for devices..."));
@@ -47,6 +52,74 @@ void setupDisplay() {
     for(;;);
   }
   display.clearDisplay();
+  
+  // Initialize screensaver timer
+  resetScreensaverTimer();
+}
+
+void resetScreensaverTimer() {
+  lastActivityTime = millis();
+  if (screensaverActive) {
+    screensaverActive = false;
+    screensaverFrame = 0;
+    // Force immediate display update when exiting screensaver
+    display.clearDisplay();
+  }
+}
+
+bool isScreensaverActive() {
+  return screensaverActive;
+}
+
+void updateScreensaver() {
+  static unsigned long lastAnimationUpdate = 0;
+  
+  // Check if we should activate screensaver
+  if (!screensaverActive && (millis() - lastActivityTime > SCREENSAVER_TIMEOUT_MS)) {
+    screensaverActive = true;
+    screensaverFrame = 0;
+    display.clearDisplay();
+    display.display();
+  }
+  
+  // If screensaver is not active, nothing to do
+  if (!screensaverActive) return;
+  
+  // Update screensaver animation
+  if (millis() - lastAnimationUpdate > SCREENSAVER_ANIMATION_INTERVAL_MS) {
+    lastAnimationUpdate = millis();
+    
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
+    
+    // Simple bouncing text animation
+    static int x = 0;
+    static int y = 0;
+    static int dx = 2;
+    static int dy = 1;
+    
+    // Alternate between the two logo frames
+    if (screensaverFrame % 2 == 0) {
+      display.drawBitmap(x, y, logo_1, 117, 42, SSD1306_WHITE);
+    } else {
+      display.drawBitmap(x, y, logo_2, 117, 42, SSD1306_WHITE);
+    }
+    
+    // Update position for bouncing effect
+    x += dx;
+    y += dy;
+    
+    // Bounce off edges
+    if (x <= 0 || x >= SCREEN_WIDTH - 117) {
+      dx = -dx;
+    }
+    if (y <= 0 || y >= SCREEN_HEIGHT - 42) {
+      dy = -dy;
+    }
+    
+    display.display();
+    screensaverFrame++;
+  }
 }
 
 void drawSplashScreen() {
@@ -80,6 +153,11 @@ void drawSplashScreen() {
 }
 
 void updateDisplay() {
+  // If screensaver is active, don't update normal display
+  if (screensaverActive) {
+    return;
+  }
+  
   static unsigned long lastDebug = 0;
   bool shouldDebug = (millis() - lastDebug > 2000);
   

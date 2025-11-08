@@ -30,6 +30,20 @@ void loop() {
     static unsigned long releaseStart = 0;        // when we first saw no-key
     static bool lastEditMode = false;             // track transitions for logging
 
+    // Update screensaver animation if active
+    updateScreensaver();
+    
+    // Skip normal processing if screensaver is active
+    if (isScreensaverActive()) {
+        // Any activity resets the screensaver
+        if (getRawKey() != NO_KEY || analogRead(JOYSTICK_X) < 350 || analogRead(JOYSTICK_X) > 650 || 
+            analogRead(JOYSTICK_Y) < 350 || analogRead(JOYSTICK_Y) > 650) {
+            resetScreensaverTimer();
+        }
+        delay(10);
+        return;
+    }
+
     // Check if C button is being held (for inversion edit mode)
     bool cButtonHeld = isModifierCHeld();
     if (cButtonHeld != lastEditMode) {
@@ -47,6 +61,7 @@ void loop() {
     
     // Handle key presses
     if (key != NO_KEY) {
+        resetScreensaverTimer();  // Reset on key press
         // If we're in edit mode (C held) and a chord key (0-6) is pressed
         if (cButtonHeld && key >= '0' && key <= '6') {
             int degree = key - '0';
@@ -117,6 +132,16 @@ void loop() {
     // Read joystick
     int xValue = 1023 - analogRead(JOYSTICK_X);  // Inverted because joystick is mounted upside down
     int yValue = analogRead(JOYSTICK_Y);
+    
+    // Reset screensaver on joystick movement (with deadzone)
+    static int lastXValue = xValue;
+    static int lastYValue = yValue;
+    if (abs(xValue - lastXValue) > 50 || abs(yValue - lastYValue) > 50) {
+        resetScreensaverTimer();
+        lastXValue = xValue;
+        lastYValue = yValue;
+    }
+    
     handleJoystick(xValue, yValue);
     
     // Stop chord when key is released (debounced)

@@ -48,6 +48,15 @@
 #define SPLASH_SCREEN_DURATION 2000
 #define STATUS_MESSAGE_DURATION 1000
 
+// Screensaver configuration
+#ifndef SCREENSAVER_TIMEOUT_MS
+#define SCREENSAVER_TIMEOUT_MS 30000  // 30 seconds of inactivity before screensaver
+#endif
+
+#ifndef SCREENSAVER_ANIMATION_INTERVAL_MS
+#define SCREENSAVER_ANIMATION_INTERVAL_MS 2000  // Animation frame change interval
+#endif
+
 extern const int MAJOR_SCALE[];
 extern const int MINOR_SCALE[];
 
