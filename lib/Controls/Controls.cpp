@@ -294,6 +294,10 @@ void handleJoystick(int x, int y) {
   int &btnPressCount = g_btnPressCount;
   static unsigned long btnPressStartTime = 0;
   static bool longPressHandled = false;
+  static bool cHeldAtPress = false;
+  
+  // Check if C modifier is held for function mode
+  bool cHeld = isModifierCHeld();
   
   bool held = isJoyButtonHeld();
   if (held != lastBtnHeld) {
@@ -301,12 +305,14 @@ void handleJoystick(int x, int y) {
       // Button just pressed
       btnPressStartTime = millis();
       longPressHandled = false;
+      cHeldAtPress = cHeld; // Remember if C was held when button was pressed
     } else if (!held && lastBtnHeld) {
       // Button just released
       unsigned long pressDuration = millis() - btnPressStartTime;
       
-      if (!longPressHandled && pressDuration < 500) {
-        // Short press - toggle bass mode
+      // Only toggle bass mode if C was held during the press
+      if (!longPressHandled && pressDuration < 500 && cHeldAtPress) {
+        // Short press with C held - toggle bass mode
         toggleBassMode();
         showStatus(String("Bass: ") + (isBassMode() ? "ON" : "OFF"), 500);
       }
@@ -314,9 +320,9 @@ void handleJoystick(int x, int y) {
     lastBtnHeld = held;
   }
   
-  // Check for long press while held
-  if (held && !longPressHandled && (millis() - btnPressStartTime > 1000)) {
-    // Long press detected - toggle auto-voicing
+  // Check for long press while held - only if C was held at press time
+  if (held && !longPressHandled && cHeldAtPress && (millis() - btnPressStartTime > 1000)) {
+    // Long press with C held - toggle auto-voicing
     toggleAutoVoicingMode();
     showStatus(String("AutoVoice: ") + (isAutoVoicingMode() ? "ON" : "OFF"), 800);
     longPressHandled = true;
@@ -324,9 +330,6 @@ void handleJoystick(int x, int y) {
 
   int dx = dirFromAxis(x);
   int dy = dirFromAxis(y);
-
-  // Check if C modifier is held for octave change mode
-  bool cHeld = isModifierCHeld();
   
   // Track octave change state
   static int lastOctaveDx = 0;
