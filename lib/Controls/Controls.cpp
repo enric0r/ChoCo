@@ -1,6 +1,8 @@
 #include "Controls.h"
+#include "Config.h"
 #include "Display.h"
 #include "ChordEngine.h"
+#include "JoystickDirection.h"
 
 // Matrix is wired column-to-row (columns are inputs, rows are outputs)
 // Keys mapping restored to the original working layout
@@ -27,16 +29,21 @@ static const unsigned long debounceDelay = 10;
 
 static unsigned long lastJoystickMoveTime = 0;
 // Track last joystick direction at file scope so we can prime it externally
-static int g_lastDx = 0;
-static int g_lastDy = 0;
+static JoystickDirection g_lastDirection = JoystickDirection::Center;
 static bool g_lastBtnHeld = false;
 static unsigned long g_lastIgnoreLog = 0;
-static unsigned long g_lastBtnPressTime = 0;
-static int g_btnPressCount = 0;
-
-// Function button state (using button 'C' as function button)
-static bool functionButtonHeld = false;
-static char lastKeyRaw = NO_KEY;
+static constexpr JoystickClassifierConfig kJoystickConfig = {
+  JOYSTICK_CENTER_X,
+  JOYSTICK_CENTER_Y,
+  JOYSTICK_TRIGGER_ENGAGE_PCT,
+  JOYSTICK_TRIGGER_RELEASE_PCT,
+  0,
+  1023
+};
+struct MatrixScanResult {
+  char firstKey;
+  bool modifierCHeld;
+};
 
 // Helper to determine if the joystick button is currently held considering polarity
 static inline bool isJoyButtonHeld() {
@@ -48,8 +55,11 @@ static inline bool isJoyButtonHeld() {
 #endif
 }
 
-// Custom keypad scanner - SWAPPED: scan rows, read columns
-char scanKeypad() {
+// Custom keypad scanner - SWAPPED: scan rows, read columns.
+// Returns both first detected key (for event flow) and C-modifier state.
+static MatrixScanResult scanMatrixState() {
+  MatrixScanResult result = {NO_KEY, false};
+
   // Ensure all rows are inactive before scanning
   for (int rr = 0; rr < ROWS; rr++) {
     digitalWrite(rowPins[rr], HIGH);
@@ -62,71 +72,54 @@ char scanKeypad() {
     // Check each column (read for LOW = pressed)
     for (int c = 0; c < COLS; c++) {
       if (digitalRead(colPins[c]) == LOW) {
-        char foundKey = keys[r][c];
-        // Immediately deactivate this row before returning to avoid ghosting
-        digitalWrite(rowPins[r], HIGH);
-        // Serial.print("Raw key detected: ");
-        // Serial.print(foundKey);
-        // Serial.print(" at row=");
-        // Serial.print(r);
-        // Serial.print(" col=");
-        // Serial.println(c);
-        return foundKey;
+        const char foundKey = keys[r][c];
+        if (foundKey == 'C') {
+          result.modifierCHeld = true;
+        }
+        if (result.firstKey == NO_KEY && foundKey != NO_KEY) {
+          result.firstKey = foundKey;
+        }
       }
     }
-    
     digitalWrite(rowPins[r], HIGH);
   }
-  return NO_KEY;
+  return result;
 }
 
-char getKey() {
-  char key = scanKeypad();
-  
-  // Debug logging
-  static unsigned long lastDebugPrint = 0;
-  static char lastDebugKey = NO_KEY;
-  if (key != lastDebugKey || (millis() - lastDebugPrint > 5000 && key != NO_KEY)) {
-    // Serial.print("getKey() scanKeypad returned: ");
-    // Serial.print(key == NO_KEY ? "NO_KEY" : String(key));
-    // Serial.print(", lastKey: ");
-    // Serial.print(lastKey == NO_KEY ? "NO_KEY" : String(lastKey));
-    // Serial.print(", lastReportedKey: ");
-    // Serial.println(lastReportedKey == NO_KEY ? "NO_KEY" : String(lastReportedKey));
-    lastDebugKey = key;
-    lastDebugPrint = millis();
-  }
-  
+static char debounceKey(char key) {
   // Debounce: only update when key changes
   if (key != lastKey) {
-    // Serial.print("Key changed from ");
-    // Serial.print(lastKey == NO_KEY ? "NO_KEY" : String(lastKey));
-    // Serial.print(" to ");
-    // Serial.println(key == NO_KEY ? "NO_KEY" : String(key));
     lastDebounceTime = millis();
     lastKey = key;
     lastReportedKey = NO_KEY; // Reset so we can report the new key
   }
-  
+
   // Report key if it's been stable for debounce period and we haven't reported it yet
   if ((millis() - lastDebounceTime) > debounceDelay && key != NO_KEY && key != lastReportedKey) {
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
     Serial.print("Key: ");
     Serial.println(key);
+#endif
     lastReportedKey = key;
     return key;
   }
-  
+
   // Clear reported key when released
   if (key == NO_KEY) {
     lastReportedKey = NO_KEY;
   }
-  
+
   return NO_KEY;
+}
+
+char getKey() {
+  const MatrixScanResult state = scanMatrixState();
+  return debounceKey(state.firstKey);
 }
 
 // Immediate, no-debounce read of the matrix
 char getRawKey() {
-  return scanKeypad();
+  return scanMatrixState().firstKey;
 }
 
 // Debug-only helper: scan the entire matrix and list all pressed keys.
@@ -162,25 +155,30 @@ void debugScanPressedKeys(char* out, int maxLen) {
 
 // Robust modifier detection: explicitly scan for 'C' being pressed
 bool isModifierCHeld() {
-  bool held = false;
-  // Ensure all rows inactive
-  for (int rr = 0; rr < ROWS; rr++) {
-    digitalWrite(rowPins[rr], HIGH);
-  }
-  for (int r = 0; r < ROWS; r++) {
-    digitalWrite(rowPins[r], LOW);
-    delayMicroseconds(50);
-    for (int c = 0; c < COLS; c++) {
-      if (digitalRead(colPins[c]) == LOW) {
-        char k = keys[r][c];
-        if (k == 'C') {
-          held = true;
-        }
-      }
-    }
-    digitalWrite(rowPins[r], HIGH);
-  }
-  return held;
+  return scanMatrixState().modifierCHeld;
+}
+
+void pollControls(ControlSnapshot& out) {
+  const MatrixScanResult state = scanMatrixState();
+  const int rawX = analogRead(JOYSTICK_X);
+  const int rawY = analogRead(JOYSTICK_Y);
+
+  int logicalX = JOYSTICK_SWAP_AXES ? rawY : rawX;
+  int logicalY = JOYSTICK_SWAP_AXES ? rawX : rawY;
+#if JOYSTICK_INVERT_X
+  logicalX = 1023 - logicalX;
+#endif
+#if JOYSTICK_INVERT_Y
+  logicalY = 1023 - logicalY;
+#endif
+
+  out.rawKey = state.firstKey;
+  out.debouncedKey = debounceKey(out.rawKey);
+  out.modifierCHeld = state.modifierCHeld;
+  out.joyX = logicalX;
+  out.joyY = logicalY;
+  out.joyBtnHeld = isJoyButtonHeld();
+  out.joyDirectionInstant = classifyJoystickDirectionInstantWithConfig(out.joyX, out.joyY, kJoystickConfig);
 }
 
 void setupControls() {
@@ -209,7 +207,7 @@ void setupControls() {
   
   // Test scan immediately after setup
   Serial.println("Testing immediate scan...");
-  char testKey = scanKeypad();
+  const char testKey = scanMatrixState().firstKey;
   if (testKey != NO_KEY) {
     Serial.print("Key detected during setup: ");
     Serial.println(testKey);
@@ -222,7 +220,7 @@ void setupControls() {
 
 void handleKeyPress(char key) {
   // Normal chord playing
-  if (key >= '0' && key <= '7') {
+  if (key >= '0' && key <= '6') {
     playChordForDegree(key - '0');
   }
   else if (key == 'A') {
@@ -237,69 +235,81 @@ void handleKeyPress(char key) {
   // Button C itself doesn't do anything when pressed alone - only used as modifier
 }
 
-static int dirFromAxis(int v) {
-  // Thresholds: <200 = -1, >800 = +1, otherwise 0
-  // Make the joystick feel more responsive by shrinking the deadzone
-  // Old: <200 / >800. New: <350 / >650 triggers with smaller deflection.
-  if (v < 350) return -1;
-  if (v > 650) return 1;
-  return 0;
+JoystickDirection classifyJoystickDirectionInstant(int x, int y) {
+  return classifyJoystickDirectionInstantWithConfig(x, y, kJoystickConfig);
 }
 
-static void applyChordVariation(int dx, int dy) {
-  if (dx == 0 && dy == 0) return;
+struct VariationMapping {
+  JoystickDirection direction;
+  const int* intervals;
+  int size;
+  const char* name;
+};
+
+static const VariationMapping kVariationMappings[] = {
+  {JoystickDirection::Up, CHORD_MAJ7, 4, "Maj7"},
+  {JoystickDirection::Down, CHORD_MIN7, 4, "Min7"},
+  {JoystickDirection::Left, CHORD_SUS2, 3, "Sus2"},
+  {JoystickDirection::Right, CHORD_SUS4, 3, "Sus4"},
+  {JoystickDirection::UpRight, CHORD_DOM9, 5, "9"},
+  {JoystickDirection::UpLeft, CHORD_DOM11, 5, "11"},
+  {JoystickDirection::DownRight, CHORD_MIN9, 5, "Min9"},
+  {JoystickDirection::DownLeft, CHORD_DIM, 3, "Dim"},
+};
+
+bool getChordVariationForDirection(JoystickDirection direction, const int*& intervals, int& size, const char*& name) {
+  for (const auto& mapping : kVariationMappings) {
+    if (mapping.direction == direction) {
+      intervals = mapping.intervals;
+      size = mapping.size;
+      name = mapping.name;
+      return true;
+    }
+  }
+
+  intervals = nullptr;
+  size = 0;
+  name = nullptr;
+  return false;
+}
+
+static bool isHorizontalDirection(JoystickDirection direction) {
+  return direction == JoystickDirection::Left || direction == JoystickDirection::Right;
+}
+
+static void applyChordVariation(JoystickDirection direction) {
+  if (direction == JoystickDirection::Center) return;
 
   // Do not play or change chords if none is currently held/active
   if (!isChordActive()) {
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
     Serial.println("Joystick variation ignored (no chord active)");
+#endif
     return;
   }
 
-  const int root = getActiveChordRoot();
-  const int *intervals = nullptr;
+  const int* intervals = nullptr;
   int size = 0;
-  String name = "";
-
-  // Map 8-way directions to chord variations
-  if (dx == 0 && dy == 1) {           // Up
-    intervals = CHORD_MAJ7; size = 4; name = "Maj7";
-  } else if (dx == 0 && dy == -1) {   // Down
-    intervals = CHORD_MIN7; size = 4; name = "Min7";
-  } else if (dx == -1 && dy == 0) {   // Left
-    intervals = CHORD_SUS2; size = 3; name = "Sus2";
-  } else if (dx == 1 && dy == 0) {    // Right
-    intervals = CHORD_SUS4; size = 3; name = "Sus4";
-  } else if (dx == 1 && dy == 1) {    // Up-Right
-    intervals = CHORD_DOM9; size = 5; name = "9";
-  } else if (dx == -1 && dy == 1) {   // Up-Left
-    intervals = CHORD_DOM11; size = 5; name = "11";
-  } else if (dx == 1 && dy == -1) {   // Down-Right
-    intervals = CHORD_MIN9; size = 5; name = "Min9";
-  } else if (dx == -1 && dy == -1) {  // Down-Left
-    intervals = CHORD_DIM; size = 3; name = "Dim";
+  const char* name = nullptr;
+  if (!getChordVariationForDirection(direction, intervals, size, name)) {
+    return;
   }
 
-  if (intervals != nullptr) {
-    Serial.print("Applying variation: "); Serial.println(name);
-    playChord(root, intervals, size, name);
-  }
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
+  Serial.print("Applying variation: "); Serial.println(name);
+#endif
+
+  const int root = getActiveChordRoot();
+  playChord(root, intervals, size, String(name));
 }
 
-void handleJoystick(int x, int y) {
-  int &lastDx = g_lastDx;
-  int &lastDy = g_lastDy;
+void handleJoystick(int x, int y, bool cHeld, bool held) {
   bool &lastBtnHeld = g_lastBtnHeld;
   unsigned long &lastIgnoreLog = g_lastIgnoreLog;
-  unsigned long &lastBtnPressTime = g_lastBtnPressTime;
-  int &btnPressCount = g_btnPressCount;
   static unsigned long btnPressStartTime = 0;
   static bool longPressHandled = false;
   static bool cHeldAtPress = false;
-  
-  // Check if C modifier is held for function mode
-  bool cHeld = isModifierCHeld();
-  
-  bool held = isJoyButtonHeld();
+
   if (held != lastBtnHeld) {
     if (held && !lastBtnHeld) {
       // Button just pressed
@@ -328,76 +338,76 @@ void handleJoystick(int x, int y) {
     longPressHandled = true;
   }
 
-  int dx = dirFromAxis(x);
-  int dy = dirFromAxis(y);
-  
-  // Track octave change state
-  static int lastOctaveDx = 0;
+  JoystickDirection direction = classifyJoystickDirectionLatchedWithConfig(x, y, g_lastDirection, kJoystickConfig);
+
+  // Track octave change state (left/right only).
+  static JoystickDirection lastOctaveDirection = JoystickDirection::Center;
   static unsigned long lastOctaveChangeTime = 0;
   
   // Helper to update joystick tracking state
   auto updateJoystickState = [&]() {
-    lastDx = dx;
-    lastDy = dy;
+    g_lastDirection = direction;
     lastJoystickMoveTime = millis();
   };
   
-  // If C is held and joystick moved left/right, change octave
-  if (cHeld && dx != 0 && dy == 0) {
+  // If C is held and joystick moved left/right, change octave.
+  if (cHeld && isHorizontalDirection(direction)) {
     // Only change on direction change to avoid repeats
-    if (dx != lastOctaveDx && (millis() - lastOctaveChangeTime >= JOYSTICK_GRACE_PERIOD)) {
-      if (dx > 0) {
+    if (direction != lastOctaveDirection && (millis() - lastOctaveChangeTime >= JOYSTICK_GRACE_PERIOD)) {
+      if (direction == JoystickDirection::Right) {
         incrementOctave();
         showStatus(String("Octave: ") + getOctaveOffset(), 600);
-      } else if (dx < 0) {
+      } else if (direction == JoystickDirection::Left) {
         decrementOctave();
         showStatus(String("Octave: ") + getOctaveOffset(), 600);
       }
-      lastOctaveDx = dx;
+      lastOctaveDirection = direction;
       lastOctaveChangeTime = millis();
       updateJoystickState();
       return; // Don't apply chord variation when changing octave
     }
+
     // If joystick is still in the same direction, just return without processing
-    if (dx == lastOctaveDx) {
+    if (direction == lastOctaveDirection) {
       updateJoystickState();
       return;
     }
   } else {
-    // Reset octave change tracking only when C is not held
-    if (!cHeld) {
-      lastOctaveDx = 0;
+    // Reset octave direction when the modifier is released or stick returns to center.
+    if (!cHeld || direction == JoystickDirection::Center) {
+      lastOctaveDirection = JoystickDirection::Center;
     }
   }
 
   // If direction changed, apply variation. Apply immediately on first move out of center;
   // otherwise respect the (reduced) grace period to avoid jitter.
-  bool changed = (dx != lastDx || dy != lastDy);
-  bool firstNonZero = (lastDx == 0 && lastDy == 0 && (dx != 0 || dy != 0));
+  bool changed = (direction != g_lastDirection);
+  bool firstNonZero = (g_lastDirection == JoystickDirection::Center && direction != JoystickDirection::Center);
   if (changed && (firstNonZero || (millis() - lastJoystickMoveTime >= JOYSTICK_GRACE_PERIOD))) {
     // Only require that a chord is currently active; do not require the joy button
     if (!isChordActive()) {
       if (millis() - lastIgnoreLog > 1000) {
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
         Serial.println("Joystick variation ignored (no chord active)");
+#endif
         lastIgnoreLog = millis();
       }
+      updateJoystickState();
       return;
     }
 
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
     Serial.print("Joystick raw x="); Serial.print(x);
     Serial.print(" y="); Serial.print(y);
-    Serial.print(" -> dx="); Serial.print(dx);
-    Serial.print(" dy="); Serial.println(dy);
+    Serial.print(" -> direction="); Serial.println((int)direction);
+#endif
 
-    applyChordVariation(dx, dy);
-    lastDx = dx;
-    lastDy = dy;
-    lastJoystickMoveTime = millis();
+    applyChordVariation(direction);
+    updateJoystickState();
   }
 }
 
-void primeJoystickDirection(int dx, int dy) {
-  g_lastDx = dx;
-  g_lastDy = dy;
+void primeJoystickDirection(JoystickDirection direction) {
+  g_lastDirection = direction;
   lastJoystickMoveTime = millis();
 }

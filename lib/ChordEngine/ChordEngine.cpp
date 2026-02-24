@@ -1,4 +1,5 @@
 #include "ChordEngine.h"
+#include "ChordLogic.h"
 #include "Display.h" // for getNoteName()
 
 // Interval sets for supported scales (7-note)
@@ -56,7 +57,15 @@ const int CHORD_DOM9[] = {0, 4, 7, 10, 14};
 const int CHORD_DOM11[] = {0, 4, 7, 10, 17};
 const int CHORD_MIN9[] = {0, 3, 7, 10, 14};
 
+bool isValidDegree(int degree) {
+  return isValidDegreeIndex(degree);
+}
+
 void playChordForDegree(int degree) {
+  if (!isValidDegree(degree)) {
+    return;
+  }
+
   stopCurrentChord();
   
   // Resolve current scale intervals
@@ -155,6 +164,7 @@ void playChordForDegree(int degree) {
     inversionToUse = bestInversion;
   currentInversion = inversionToUse;
     
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
     Serial.print("Auto-voicing: degree=");
     Serial.print(degree);
     Serial.print(" root=");
@@ -163,6 +173,7 @@ void playChordForDegree(int degree) {
     Serial.print(bestOctave);
     Serial.print(" inversion=");
     Serial.println(bestInversion);
+#endif
   } else {
     // Use the stored inversion for this degree
     currentInversion = inversionToUse;
@@ -179,6 +190,10 @@ void playChordForDegree(int degree) {
 
 // Variant: play a specific degree but with custom chord intervals (e.g., Maj7/Sus)
 void playChordForDegreeWithIntervals(int degree, const int* forcedIntervals, int forcedSize, const char* forcedName) {
+  if (!isValidDegree(degree) || forcedIntervals == nullptr || forcedSize <= 0) {
+    return;
+  }
+
   stopCurrentChord();
 
   // Resolve current scale intervals
@@ -235,10 +250,12 @@ void playChordForDegreeWithIntervals(int degree, const int* forcedIntervals, int
     root = root + (bestOctave * 12);
     inversionToUse = bestInversion;
     currentInversion = inversionToUse;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
     Serial.print("Auto-voicing (forced): degree="); Serial.print(degree);
     Serial.print(" root="); Serial.print(root);
     Serial.print(" octave="); Serial.print(bestOctave);
     Serial.print(" inversion="); Serial.println(bestInversion);
+#endif
   } else {
     currentInversion = inversionToUse;
   }
@@ -316,7 +333,7 @@ void playChord(int root, const int* intervals, int size, String name) {
     static const char* R_LO[7] = {"i","ii","iii","iv","v","vi","vii"};
     if (thirdInt == 4 && fifthInt == 7) return R_UP[d];
     if (thirdInt == 3 && fifthInt == 7) return R_LO[d];
-    if (thirdInt == 3 && fifthInt == 6) return "vii°"; // diminished
+    if (thirdInt == 3 && fifthInt == 6) return "vii(dim)"; // diminished
     if (thirdInt == 4 && fifthInt == 8) return "III+"; // rough indicator for aug
     return R_UP[d];
   };
@@ -396,11 +413,8 @@ void stopCurrentChord() {
 
 String getCurrentChordName() {
   if (currentChord.size == 0) {
-    Serial.println("getCurrentChordName: No active chord");
     return "";
   }
-  Serial.print("getCurrentChordName: ");
-  Serial.println(currentChord.name);
   return currentChord.name;
 }
 
@@ -418,11 +432,11 @@ void setCurrentRootNote(int newRoot) {
 ScaleType getScaleType() { return currentScale; }
 void setScaleType(ScaleType type) { currentScale = type; }
 void cycleScaleType(int step) {
-  int t = (int)currentScale + step;
-  while (t < 0) t += (int)SCALE_COUNT;
-  t %= (int)SCALE_COUNT;
+  int t = wrapScaleIndex((int)currentScale, step, (int)SCALE_COUNT);
   currentScale = (ScaleType)t;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
   Serial.print("Scale: "); Serial.println(getCurrentScaleName());
+#endif
 }
 
 void setCurrentInversion(int inversion) {
@@ -434,29 +448,33 @@ int getCurrentInversion() {
 }
 
 void setInversionForDegree(int degree, int inversion) {
-  if (degree >= 0 && degree < 7) {
-    chordInversions[degree] = inversion % 3; // cycle 0..2
+  if (isValidDegree(degree)) {
+    chordInversions[degree] = normalizeTriadInversion(inversion);
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
     Serial.print("Set inversion for degree ");
     Serial.print(degree);
     Serial.print(" to ");
     Serial.println(chordInversions[degree]);
+#endif
   }
 }
 
 int getInversionForDegree(int degree) {
-  if (degree >= 0 && degree < 7) {
+  if (isValidDegree(degree)) {
     return chordInversions[degree];
   }
   return 0;
 }
 
 void cycleInversionForDegree(int degree) {
-  if (degree >= 0 && degree < 7) {
+  if (isValidDegree(degree)) {
     chordInversions[degree] = (chordInversions[degree] + 1) % 3;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
     Serial.print("Cycled inversion for degree ");
     Serial.print(degree);
     Serial.print(" to ");
     Serial.println(chordInversions[degree]);
+#endif
   }
 }
 
@@ -533,7 +551,7 @@ const char* getCurrentScaleName() {
     case SCALE_MELODIC_MINOR: return "MelMin";
     default: return "Ionian";
   }
-}// Temporary file - append this to ChordEngine.cpp after getCurrentScaleName()
+}
 
 // ---- Chord History ----
 void printChordHistory() {

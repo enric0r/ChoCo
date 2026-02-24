@@ -1,166 +1,167 @@
-# ChoCo — USB MIDI Chord Controller (RP2040 + Keypad + Joystick + OLED)
+# ChoCo - USB MIDI Chord Controller (RP2040 + Keypad + Joystick + OLED)
 
-ChoCo is a compact USB‑MIDI controller built on RP2040 that lets you trigger diatonic chords from a keypad, shape them with a thumb joystick (7ths, 9ths, sus, dim, etc.), and see status on a small SSD1306 OLED. It enumerates as a class‑compliant USB MIDI device and works with DAWs and synths on Windows/macOS/Linux.
+ChoCo is a compact USB-MIDI controller for RP2040 boards.  
+It plays scale-aware chords from a 3x4 keypad, applies chord variations from an analog joystick, and shows live status on a 128x64 SSD1306 OLED.
 
 ## Highlights
 
-- Keypad matrix triggers chord degrees instantly; release stops the chord
-- Joystick applies expressive chord variations (8‑way) only when a chord is active
-- OLED shows root, scale (Maj/Min), inversion, and quick status messages
-- Class‑compliant USB MIDI via TinyUSB (works without drivers)
-- Built with PlatformIO (Arduino core for RP2040)
+- Class-compliant USB MIDI over TinyUSB
+- 3x4 keypad for chord degrees and functions
+- 8-way joystick chord variations (Maj7, Min7, Sus, 9, 11, Dim)
+- Per-degree inversion memory and optional auto-voicing
+- Optional bass pedal note and octave-shift controls
+- OLED status display with mode badges and recent chord-degree history
 
 ## Hardware
 
-- MCU: Any RP2040 board (e.g., Raspberry Pi Pico)
-- Keypad: 3×4 matrix
-  - Rows (outputs/scan): GP2, GP1, GP0
-  - Cols (inputs with pull‑ups/read): GP3, GP4, GP5, GP6
-- Joystick: 2‑axis analog + push button
-  - X: A0
-  - Y: A1
-  - Button: GP7 (active‑low by default)
-- OLED: SSD1306 128×64 I2C on I2C1
+- MCU: RP2040 board (example: Raspberry Pi Pico)
+- Keypad: 3x4 matrix
+  - Rows (outputs): GP2, GP1, GP0
+  - Columns (inputs pull-up): GP3, GP4, GP5, GP6
+- Joystick:
+  - X axis: A0
+  - Y axis: A1
+  - Button: GP13 (active-low by default)
+- OLED: SSD1306 128x64 over I2C
   - SDA: GP14
   - SCL: GP15
+  - Bus selection: `I2C_PORT` (`0 = Wire`, `1 = Wire1`)
 
-Notes
-- Matrix is wired column‑to‑row: rows are driven (outputs), columns are sensed (INPUT_PULLUP).
-- Ensure the OLED module is 3.3V‑compatible or level‑shifted. Use pull‑ups to 3.3V.
+## Keypad Layout and Behavior
 
-## Keypad layout and actions
+Physical layout (top to bottom):
 
-Physical mapping (top → bottom):
+- `A B C _`
+- `1 3 5 _`
+- `0 2 4 6`
 
-- A  B  C  _
-- 1  3  5  _
-- 0  2  4  6
+Actions:
 
-Behavior
-- Digits 0..7: playChordForDegree(degree)
-- A: increment root note (wraps across octaves)
-- B: toggle scale (Major/Minor)
-- C: cycle inversion (0..2)
-- Release: a brief debounce (~50 ms), then stopCurrentChord()
+- `0..6`: play chord for scale degree
+- `A`: increment root note (wraps chromatically)
+- `B`: cycle scale type (Ionian -> ... -> Melodic Minor -> Ionian)
+- `C` + `0..6`: cycle inversion for that degree
+- `C` + `B`: print chord history to serial
 
-Wiring arrays (see `src/Controls.cpp`)
-- `rowPins[ROWS] = {2, 1, 0}`
-- `colPins[COLS] = {3, 4, 5, 6}`
+Release behavior:
 
-## Joystick variations
+- Active chord is stopped after a short release debounce (`~50 ms`)
 
-Variations apply only when a chord is currently active:
+## Joystick Controls
 
-- Up: Maj7
-- Down: Min7
-- Left: Sus2
-- Right: Sus4
-- Up‑Right: 9
-- Up‑Left: 11
-- Down‑Right: Min9
-- Down‑Left: Dim
+Chord variations (while chord is active):
 
-### Octave Change
+- Up: `Maj7`
+- Down: `Min7`
+- Left: `Sus2`
+- Right: `Sus4`
+- Up-right: `9`
+- Up-left: `11`
+- Down-right: `Min9`
+- Down-left: `Dim`
 
-While holding the C modifier key, you can change the octave by moving the joystick left or right:
+Modifier behavior:
 
-- Hold C + Joystick Left: Decrease octave (-1)
-- Hold C + Joystick Right: Increase octave (+1)
-- Range: -2 to +2 octaves
-- The current octave offset is displayed on screen when changed
-- The octave offset applies to all chords until changed again
+- `C` + joystick left/right: octave offset down/up (range `-2..+2`)
+- `C` + joystick button short press: toggle bass mode
+- `C` + joystick button long press: toggle auto-voicing mode
 
-Responsiveness
-- Deadzone tightened: X/Y < 350 ⇒ −1, > 650 ⇒ +1, otherwise 0 (see `dirFromAxis`)
-- First movement out of center applies immediately; subsequent changes use a short grace period
-- Grace period: `JOYSTICK_GRACE_PERIOD` = 120 ms (see `src/Config.h`)
-- Button polarity: `JOYSTICK_BUTTON_ACTIVE_LOW` (1 = active‑low)
+## Build and Upload (PlatformIO)
 
-## USB MIDI and naming
+From CLI:
 
-- By default, the project uses the core’s default descriptors for maximum compatibility.
-- You can force custom VID/PID and strings in `src/Config.h`:
-  - `USB_USE_CUSTOM_DESCRIPTORS` (0/1)
-  - `USB_VENDOR_ID`, `USB_PRODUCT_ID`
-  - `USB_MANUFACTURER`, `USB_PRODUCT`, `USB_SERIAL`, `USB_MIDI_INTERFACE`
+```powershell
+pio run
+pio run -t upload
+pio device monitor
+```
 
-Tip (Windows): If USB name changes don’t appear, unplug/replug and try a different product string to refresh the cache.
+From VS Code:
 
-## Build and upload (PlatformIO)
+1. Open this folder in VS Code
+2. Build with PlatformIO
+3. Upload firmware
+4. Open serial monitor for diagnostics
 
-VS Code + PlatformIO (recommended)
-1) Install the PlatformIO extension
-2) Open the `ChoCo` folder
-3) Build (checkmark), then Upload (arrow)
-4) Monitor (plug icon) to see logs
+## Configuration Reference (`lib/Config/Config.h`)
 
-CLI (optional)
-- `pio run`
-- `pio run -t upload`
-- `pio device monitor`
+- Display:
+  - `SCREEN_WIDTH`, `SCREEN_HEIGHT`, `SCREEN_ADDRESS`
+- I2C:
+  - `I2C_SDA_PIN`, `I2C_SCL_PIN`, `I2C_PORT`
+- Joystick:
+  - `JOYSTICK_X`, `JOYSTICK_Y`, `JOYSTICK_BTN`
+  - `JOYSTICK_SWAP_AXES`, `JOYSTICK_INVERT_X`, `JOYSTICK_INVERT_Y`
+  - `JOYSTICK_CENTER_X`, `JOYSTICK_CENTER_Y`
+  - `JOYSTICK_TRIGGER_ENGAGE_PCT`, `JOYSTICK_TRIGGER_RELEASE_PCT`
+  - `JOYSTICK_BUTTON_ACTIVE_LOW`
+  - `JOYSTICK_GRACE_PERIOD`
+- Timing:
+  - `SPLASH_SCREEN_DURATION`
+  - `STATUS_MESSAGE_DURATION`
+  - `SCREENSAVER_TIMEOUT_MS`
+  - `SCREENSAVER_ANIMATION_INTERVAL_MS`
+- MIDI naming:
+  - `USB_USE_CUSTOM_DESCRIPTORS`
+  - `USB_MANUFACTURER`
+  - `USB_PRODUCT`
+- Logging:
+  - `CHOCO_LOG_LEVEL`
+  - `LOG_CHORDS`
 
-## Configuration reference (src/Config.h)
+## Project Structure
 
-- Display & I2C
-  - `I2C_SDA_PIN` = 14, `I2C_SCL_PIN` = 15, `I2C_PORT` = 1 (Wire1)
-- Joystick
-  - `JOYSTICK_X` = A0, `JOYSTICK_Y` = A1, `JOYSTICK_BTN` = 7
-  - `JOYSTICK_BUTTON_ACTIVE_LOW` = 1
-  - `JOYSTICK_GRACE_PERIOD` = 120
-- Logging
-  - `LOG_CHORDS` = 1 (verbose chord start/stop logs)
-- USB descriptors (see previous section)
+- `src/main.cpp` - runtime loop and integration flow
+- `lib/Controls/*` - keypad scanning, snapshots, joystick actions
+- `lib/ChordEngine/*` - harmony logic, voicing, chord state/history
+- `lib/Display/*` - OLED rendering, splash, screensaver, status
+- `lib/MIDI/*` - TinyUSB MIDI transport
+- `lib/Config/*` - pins, timing, compile-time flags
+- `test/logic/test_chord_logic.cpp` - fast logic boundary tests
+- `test/logic/test_joystick_direction.cpp` - joystick octant/radius classifier tests
 
-## Project structure
+## Joystick Trigger Tuning
 
-- `src/`
-  - `main.cpp` — main loop, input polling, release handling
-  - `Controls.cpp/.h` — keypad scan, joystick mapping, variations
-  - `ChordEngine.cpp/.h` — chord generation, inversion, state
-  - `Display.cpp/.h` — OLED status display
-  - `MIDI.cpp/.h` — USB MIDI plumbing (TinyUSB)
-  - `Config.h/.cpp` — pins, flags, timing, descriptors
-- `lib/` — optional libraries
-- `include/` — headers
-- `platformio.ini` — PlatformIO project config
+Joystick direction triggers now use an outer-ring octant classifier with hysteresis:
+
+- Engage radius: `JOYSTICK_TRIGGER_ENGAGE_PCT` (default `72`)
+- Release radius: `JOYSTICK_TRIGGER_RELEASE_PCT` (default `55`)
+- Fixed center: `JOYSTICK_CENTER_X`, `JOYSTICK_CENTER_Y` (default `512`, `512`)
+
+Recommended presets:
+
+- More edge-focused:
+  - `JOYSTICK_TRIGGER_ENGAGE_PCT=80`
+  - `JOYSTICK_TRIGGER_RELEASE_PCT=62`
+- More responsive:
+  - `JOYSTICK_TRIGGER_ENGAGE_PCT=65`
+  - `JOYSTICK_TRIGGER_RELEASE_PCT=50`
 
 ## Troubleshooting
 
-- USB MIDI not recognized
-  - Try setting `USB_USE_CUSTOM_DESCRIPTORS` = 0 (core defaults)
-  - Change `USB_PRODUCT` temporarily to refresh the Windows cache
-  - Use a known‑good USB cable/port and power‑cycle the board
-- Keypad double‑triggers or cross‑talk
-  - Verify row/col wiring: rows → GP2/1/0 (outputs), cols → GP3/4/5/6 (inputs with pull‑ups)
-  - Ensure rows idle HIGH; only one row is pulled LOW while scanning (handled in code)
-- Joystick too sensitive or too slow
-  - Adjust `dirFromAxis` thresholds in `Controls.cpp`
-  - Tweak `JOYSTICK_GRACE_PERIOD` in `Config.h`
-- No OLED output
-  - Confirm OLED power (3.3V), I2C pins (GP14/GP15), and that `I2C_PORT` is set to 1
+- MIDI device not visible:
+  - Confirm known-good USB data cable
+  - Replug after flashing
+  - Try `USB_USE_CUSTOM_DESCRIPTORS = 0` for maximum compatibility
+- OLED not detected:
+  - Verify power and `SCREEN_ADDRESS`
+  - Verify SDA/SCL pins and selected `I2C_PORT`
+  - Check serial output from I2C scanner during setup
+- Keypad ghosting or missed input:
+  - Confirm row/column wiring and pull-ups
+  - Confirm rows idle HIGH and only one row is driven LOW during scan
+- Joystick too sensitive:
+  - Tune `JOYSTICK_TRIGGER_ENGAGE_PCT` and `JOYSTICK_TRIGGER_RELEASE_PCT`
+  - Tune `JOYSTICK_GRACE_PERIOD` in `lib/Config/Config.h`
 
-## Roadmap / ideas
-- **Performance/playability**:
-  - Octave shift: hold A + joystick up/down to transpose root by ±12; show “Oct ±1”.
-  - Strum/arp modes: toggleable; set direction (up/down), speed via joystick Y, width via X.
-  - Latch/sustain: toggle to keep last chord on until next press or pedal off.
-  - Single-note lead layer: hold a modifier to send scale notes on a separate MIDI channel.
-- **Harmony/Voicing**:
-  - Borrowed chords (modal interchange): toggle to access bIII, bVI, bVII in major.
-  - Secondary dominants: hold C + press a degree to play its V/ (e.g., V/ii).
-  - Guide-tones mode: 3rds/7ths only for tighter jazz voicings.
-  - Spread voicings: “open” triads or add 10ths; toggleable.
-- **Scales/modes**:
-  - Add pentatonic/blues; map degrees 0–4; long-press B to switch “pentatonic layout”.
-- **Bass and split**:
-  - Split MIDI channels: send chords on Ch1, bass on Ch2; per-part velocity/CC.
-  - Smart bass patterns: root-only, octave-doubling, or walking (scale-aware).
-- **Timing/clock**:
-  - Tap tempo + internal clock; sync arps/strums.
-  - MIDI Clock sync in; quantize chord changes to beat/bar.
-- **Controls/UX**:
-  - Panic/All Notes Off (C + 0)
+## Hardware Regression Checklist
 
----
+Run before release:
 
-Made with ❤️ for quick harmony exploration. Plug it in, press a key, and jam.
+1. Rapid tap `0..6` and confirm no stuck notes.
+2. Hold `C` and press `0..6`, confirm inversion changes only (no chord playback).
+3. Hold a chord and move joystick to all 8 directions, confirm correct variation names/behavior.
+4. Hold `C` and move joystick left/right, confirm one octave step per direction change.
+5. Hold `C` and short/long press joystick button, confirm bass and auto-voicing toggles.
+6. Leave idle until screensaver starts, then wake by key or joystick movement.
+7. Confirm OLED top-line state badges reflect edit/bass/auto-voicing modes.

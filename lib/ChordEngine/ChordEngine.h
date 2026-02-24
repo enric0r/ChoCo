@@ -26,6 +26,7 @@ enum ScaleType : uint8_t {
   SCALE_COUNT
 };
 
+bool isValidDegree(int degree);
 void playChordForDegree(int degree);
 void playChord(int root, const int* intervals, int size, String name);
 // Play a chord for the given degree using an explicit intervals set (e.g., Maj7, Sus).

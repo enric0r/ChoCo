@@ -4,11 +4,12 @@
 Adafruit_USBD_MIDI usb_midi;
 
 void setupMIDI() {
-    // Set a friendly USB device name that will appear on the host
-    // Use the Adafruit_TinyUSB API to set string descriptors.
-    // You can change these strings to whatever you prefer.
-    TinyUSBDevice.setManufacturerDescriptor("ChoCo");
-    TinyUSBDevice.setProductDescriptor("ChoCo");
+    // Optional custom USB strings. Keeping this disabled by default preserves
+    // core defaults, which are usually the most host-compatible.
+#if USB_USE_CUSTOM_DESCRIPTORS
+    TinyUSBDevice.setManufacturerDescriptor(USB_MANUFACTURER);
+    TinyUSBDevice.setProductDescriptor(USB_PRODUCT);
+#endif
 
     usb_midi.begin();
 }

@@ -82,15 +82,15 @@ This means hardware issue or wiring problem. Try the standalone test:
 Keypad Matrix Layout:
          Col0  Col1  Col2  Col3
          GP3   GP4   GP5   GP6
-Row0 GP2  A     1     0    -
-Row1 GP1  B     3     2    -  
-Row2 GP0  C     5     4    6
+Row0 GP2  0     2     4    6
+Row1 GP1  1     3     5    -
+Row2 GP0  A     B     C    -
 
 Key Functions:
 0-6: Play chord degrees
 A: Change root note
-B: Toggle Major/Minor scale
-C: Toggle inversion mode
+B: Cycle scale type
+C: Modifier key (inversion edit mode when held)
 ```
 
 ## Next Steps
