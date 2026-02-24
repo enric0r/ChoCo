@@ -8,6 +8,7 @@
 void setupDisplay();
 void drawSplashScreen();
 void updateDisplay();
+void setEditModeIndicator(bool enabled);
 void showStatus(String message, unsigned long durationMs = STATUS_MESSAGE_DURATION);
 String getNoteName(int noteNumber);
 void drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h);

@@ -3,8 +3,6 @@
 #include "Display.h"
 #include "ChordEngine.h"
 #include "Controls.h"
-#include <Wire.h>
-#include <Adafruit_SSD1306.h>
 
 void setup() {
     Serial.begin(115200);
@@ -25,137 +23,83 @@ void setup() {
 }
 
 void loop() {
-    // Read keypad using custom scanner
-    static char activeKey = NO_KEY;               // last key whose chord we started
-    static unsigned long releaseStart = 0;        // when we first saw no-key
-    static bool lastEditMode = false;             // track transitions for logging
+    static char activeKey = NO_KEY;        // last key whose chord we started
+    static unsigned long releaseStart = 0; // when we first saw no-key
+    static int lastXValue = JOYSTICK_CENTER_X;
+    static int lastYValue = JOYSTICK_CENTER_Y;
 
-    // Update screensaver animation if active
     updateScreensaver();
-    
+
+    ControlSnapshot controls = {};
+    pollControls(controls);
+    setEditModeIndicator(controls.modifierCHeld);
+
     // Skip normal processing if screensaver is active
     if (isScreensaverActive()) {
-        // Any activity resets the screensaver
-        if (getRawKey() != NO_KEY || analogRead(JOYSTICK_X) < 350 || analogRead(JOYSTICK_X) > 650 || 
-            analogRead(JOYSTICK_Y) < 350 || analogRead(JOYSTICK_Y) > 650) {
+        const bool axisMoved = (controls.joyDirectionInstant != JoystickDirection::Center);
+        if (controls.rawKey != NO_KEY || axisMoved || controls.joyBtnHeld) {
             resetScreensaverTimer();
         }
         delay(10);
         return;
     }
 
-    // Check if C button is being held (for inversion edit mode)
-    bool cButtonHeld = isModifierCHeld();
-    if (cButtonHeld != lastEditMode) {
-        char pressed[32];
-        debugScanPressedKeys(pressed, sizeof(pressed));
-        Serial.print("EditMode ");
-        Serial.print(cButtonHeld ? "ON" : "OFF");
-        Serial.print(" | Cheld="); Serial.print(cButtonHeld ? "1" : "0");
-        Serial.print(" | pressed=["); Serial.print(pressed); Serial.println("]");
-        lastEditMode = cButtonHeld;
-    }
-    
-    // Get debounced key
-    char key = getKey();
-    
+    const bool cButtonHeld = controls.modifierCHeld;
+    const char key = controls.debouncedKey;
+
     // Handle key presses
     if (key != NO_KEY) {
-        resetScreensaverTimer();  // Reset on key press
-        // If we're in edit mode (C held) and a chord key (0-6) is pressed
+        resetScreensaverTimer();
+
         if (cButtonHeld && key >= '0' && key <= '6') {
-            int degree = key - '0';
-            Serial.print("Inversion-edit key press | degree="); Serial.print(degree);
-            Serial.print(" | before inv="); Serial.println(getInversionForDegree(degree));
+            const int degree = key - '0';
             cycleInversionForDegree(degree);
-            int inv = getInversionForDegree(degree);
+            const int inv = getInversionForDegree(degree);
             showStatus(String("Deg ") + degree + " Inv: " + inv, 800);
-            Serial.print("Inversion set | degree="); Serial.print(degree);
-            Serial.print(" | after inv="); Serial.println(inv);
-            // Don't play chord or set activeKey in edit mode
-        }
-        // Normal mode - play chords (only if C is NOT held)
-        else if (!cButtonHeld && key >= '0' && key <= '7') {
-            Serial.print("Play key press | key="); Serial.print(key);
+        } else if (!cButtonHeld && key >= '0' && key <= '6') {
+            const int* varIntervals = nullptr;
+            int varSize = 0;
+            const char* varName = nullptr;
+            const JoystickDirection direction = controls.joyDirectionInstant;
+            const bool hasVariation = getChordVariationForDirection(direction, varIntervals, varSize, varName);
 
-            // If joystick is held in a direction, apply the mapped variation immediately
-            int xNow = 1023 - analogRead(JOYSTICK_X);  // Inverted because joystick is mounted upside down
-            int yNow = analogRead(JOYSTICK_Y);
-            auto dirFromAxisQuick = [](int v){ if (v < 350) return -1; if (v > 650) return 1; return 0; };
-            int dx = dirFromAxisQuick(xNow);
-            int dy = dirFromAxisQuick(yNow);
-
-            const int* varIntervals = nullptr; int varSize = 0; const char* varName = nullptr;
-            if (dx == 0 && dy == 1) {           // Up
-                varIntervals = CHORD_MAJ7; varSize = 4; varName = "Maj7";
-            } else if (dx == 0 && dy == -1) {   // Down
-                varIntervals = CHORD_MIN7; varSize = 4; varName = "Min7";
-            } else if (dx == -1 && dy == 0) {   // Left
-                varIntervals = CHORD_SUS2; varSize = 3; varName = "Sus2";
-            } else if (dx == 1 && dy == 0) {    // Right
-                varIntervals = CHORD_SUS4; varSize = 3; varName = "Sus4";
-            } else if (dx == 1 && dy == 1) {    // Up-Right
-                varIntervals = CHORD_DOM9; varSize = 5; varName = "9";
-            } else if (dx == -1 && dy == 1) {   // Up-Left
-                varIntervals = CHORD_DOM11; varSize = 5; varName = "11";
-            } else if (dx == 1 && dy == -1) {   // Down-Right
-                varIntervals = CHORD_MIN9; varSize = 5; varName = "Min9";
-            } else if (dx == -1 && dy == -1) {  // Down-Left
-                varIntervals = CHORD_DIM; varSize = 3; varName = "Dim";
-            }
-
-            int degree = key - '0';
-            if (varIntervals != nullptr) {
-                Serial.print(" | Initial variation: "); Serial.println(varName);
-                // Prime joystick state to avoid immediate duplicate re-application
-                primeJoystickDirection(dx, dy);
+            const int degree = key - '0';
+            if (hasVariation) {
+                primeJoystickDirection(direction);
                 playChordForDegreeWithIntervals(degree, varIntervals, varSize, varName);
             } else {
                 handleKeyPress(key);
             }
             activeKey = key;
             releaseStart = 0;
-        }
-        // Chord history: hold C and press 'B'
-        else if (cButtonHeld && key == 'B') {
-            Serial.println("Printing chord history...");
+        } else if (cButtonHeld && key == 'B') {
             printChordHistory();
             showStatus("History", 600);
-        }
-        // Function keys (A, B) work normally when C not held
-        else if (!cButtonHeld && (key == 'A' || key == 'B')) {
-            Serial.print("Function key press | key="); Serial.println(key);
+        } else if (!cButtonHeld && (key == 'A' || key == 'B')) {
             handleKeyPress(key);
         }
     }
-    
-    // Read joystick
-    int xValue = 1023 - analogRead(JOYSTICK_X);  // Inverted because joystick is mounted upside down
-    int yValue = analogRead(JOYSTICK_Y);
-    
+
     // Reset screensaver on joystick movement (with deadzone)
-    static int lastXValue = xValue;
-    static int lastYValue = yValue;
-    if (abs(xValue - lastXValue) > 50 || abs(yValue - lastYValue) > 50) {
+    if (abs(controls.joyX - lastXValue) > 50 || abs(controls.joyY - lastYValue) > 50) {
         resetScreensaverTimer();
-        lastXValue = xValue;
-        lastYValue = yValue;
+        lastXValue = controls.joyX;
+        lastYValue = controls.joyY;
     }
-    
-    handleJoystick(xValue, yValue);
-    
+
+    handleJoystick(controls.joyX, controls.joyY, cButtonHeld, controls.joyBtnHeld);
+
     // Stop chord when key is released (debounced)
     if (activeKey != NO_KEY) {
-        if (getRawKey() == NO_KEY) {
+        if (controls.rawKey == NO_KEY) {
             if (releaseStart == 0) {
                 releaseStart = millis();
-            } else if (millis() - releaseStart > 50) { // debounce release
+            } else if (millis() - releaseStart > 50) {
                 stopCurrentChord();
                 activeKey = NO_KEY;
                 releaseStart = 0;
             }
         } else {
-            // still held, reset release timer
             releaseStart = 0;
         }
     }

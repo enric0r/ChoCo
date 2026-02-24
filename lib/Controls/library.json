@@ -4,6 +4,7 @@
   "description": "ChoCo input controls (keypad and joystick)",
   "dependencies": {
     "Config": "*",
-    "Display": "*"
+    "Display": "*",
+    "ChordEngine": "*"
   }
 }

@@ -16,8 +16,53 @@
 // Joystick pins
 #define JOYSTICK_X A0
 #define JOYSTICK_Y A1
-// Joystick button: mapped to GP7 in your CircuitPython config
+// Joystick button mapped to GP13
 #define JOYSTICK_BTN 13
+
+// Joystick orientation mapping for current PCB revision.
+// 1 swaps X/Y so logical left-right follows physical left-right.
+#ifndef JOYSTICK_SWAP_AXES
+#define JOYSTICK_SWAP_AXES 1
+#endif
+
+// Apply inversion after optional axis swap.
+#ifndef JOYSTICK_INVERT_X
+#define JOYSTICK_INVERT_X 1
+#endif
+
+#ifndef JOYSTICK_INVERT_Y
+#define JOYSTICK_INVERT_Y 1
+#endif
+
+// Fixed joystick center for radial classification.
+#ifndef JOYSTICK_CENTER_X
+#define JOYSTICK_CENTER_X 512
+#endif
+
+#ifndef JOYSTICK_CENTER_Y
+#define JOYSTICK_CENTER_Y 512
+#endif
+
+// Outer-ring trigger thresholds.
+#ifndef JOYSTICK_TRIGGER_ENGAGE_PCT
+#define JOYSTICK_TRIGGER_ENGAGE_PCT 72
+#endif
+
+#ifndef JOYSTICK_TRIGGER_RELEASE_PCT
+#define JOYSTICK_TRIGGER_RELEASE_PCT 55
+#endif
+
+#if (JOYSTICK_TRIGGER_ENGAGE_PCT <= 0) || (JOYSTICK_TRIGGER_ENGAGE_PCT >= 100)
+#error "JOYSTICK_TRIGGER_ENGAGE_PCT must be between 1 and 99"
+#endif
+
+#if (JOYSTICK_TRIGGER_RELEASE_PCT <= 0) || (JOYSTICK_TRIGGER_RELEASE_PCT >= 100)
+#error "JOYSTICK_TRIGGER_RELEASE_PCT must be between 1 and 99"
+#endif
+
+#if (JOYSTICK_TRIGGER_RELEASE_PCT >= JOYSTICK_TRIGGER_ENGAGE_PCT)
+#error "JOYSTICK_TRIGGER_RELEASE_PCT must be less than JOYSTICK_TRIGGER_ENGAGE_PCT"
+#endif
 
 // I2C pins (change these if your wiring uses different GPIOs)
 // Set to match CircuitPython wiring: SDA=GP14, SCL=GP15
@@ -28,6 +73,9 @@
 // Select I2C port: 0 -> Wire (I2C0), 1 -> Wire1 (I2C1)
 // Use 1 because your CircuitPython wiring uses GP14/GP15 (I2C1)
 #define I2C_PORT 1
+#if (I2C_PORT != 0) && (I2C_PORT != 1)
+#error "I2C_PORT must be 0 (Wire) or 1 (Wire1)"
+#endif
 
 // Musical constants
 #define BASE_NOTE 60 // Middle C
@@ -60,27 +108,27 @@
 extern const int MAJOR_SCALE[];
 extern const int MINOR_SCALE[];
 
-// Debug / logging controls
+// Logging controls
+#define CHOCO_LOG_LEVEL_NONE 0
+#define CHOCO_LOG_LEVEL_INFO 1
+#define CHOCO_LOG_LEVEL_DEBUG 2
+#ifndef CHOCO_LOG_LEVEL
+#define CHOCO_LOG_LEVEL CHOCO_LOG_LEVEL_INFO
+#endif
+
+// Chord logs are enabled only when log level is INFO or higher.
 #ifndef LOG_CHORDS
-#define LOG_CHORDS 1  // Set to 0 to silence chord start/stop logs
+#define LOG_CHORDS (CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO)
 #endif
 
 // USB Device Descriptors (can be overridden via build_flags -D MACRO=VALUE)
 #ifndef USB_USE_CUSTOM_DESCRIPTORS
-#define USB_USE_CUSTOM_DESCRIPTORS 0  // Set to 1 to force custom VID/PID and names; 0 = use core defaults (most compatible)
+#define USB_USE_CUSTOM_DESCRIPTORS 0  // 1 = force custom product/manufacturer strings, 0 = core defaults
 #endif
 
 // Joystick button polarity (default active-low with INPUT_PULLUP)
 #ifndef JOYSTICK_BUTTON_ACTIVE_LOW
 #define JOYSTICK_BUTTON_ACTIVE_LOW 1
-#endif
-
-#ifndef USB_VENDOR_ID
-#define USB_VENDOR_ID 0xCafe
-#endif
-
-#ifndef USB_PRODUCT_ID
-#define USB_PRODUCT_ID 0x4011
 #endif
 
 #ifndef USB_MANUFACTURER
@@ -89,14 +137,6 @@ extern const int MINOR_SCALE[];
 
 #ifndef USB_PRODUCT
 #define USB_PRODUCT "ChoCo MIDI Controller"
-#endif
-
-#ifndef USB_SERIAL
-#define USB_SERIAL "0001"
-#endif
-
-#ifndef USB_MIDI_INTERFACE
-#define USB_MIDI_INTERFACE "ChoCo MIDI"
 #endif
 
 #endif

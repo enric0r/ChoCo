@@ -9,3 +9,11 @@ in the development cycle.
 
 More information about PlatformIO Unit Testing:
 - https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+
+Additional fast logic tests live in:
+- `test/logic/test_chord_logic.cpp`
+- `test/logic/test_joystick_direction.cpp`
+
+They validate pure harmony helpers (degree bounds, scale wrap, inversion normalization)
+and joystick direction classification (outer-ring octants + hysteresis) and run in CI
+using a standard C++ compiler.
