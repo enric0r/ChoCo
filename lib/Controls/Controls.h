@@ -41,10 +41,10 @@ void pollControls(ControlSnapshot& out);
 // Classify the current joystick direction using edge-trigger instant mode.
 JoystickDirection classifyJoystickDirectionInstant(int x, int y);
 // Lookup chord variation intervals associated with a joystick direction.
-bool getChordVariationForDirection(JoystickDirection direction, const int*& intervals, int& size, const char*& name);
+bool getChordVariationForDirection(JoystickDirection direction, int degree, const int*& intervals, int& size, const char*& name);
 void setupControls();
 void handleKeyPress(char key);
-void handleJoystick(int x, int y, bool modifierCHeld, bool joyBtnHeld);
+void handleJoystick(int x, int y, bool modifierCHeld, bool joyBtnHeld, char rawKey);
 
 // Seed the joystick direction state to avoid immediate re-application
 // of the same variation right after starting a chord with a held joystick.

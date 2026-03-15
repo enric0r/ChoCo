@@ -6,20 +6,30 @@
 
 void setup() {
     Serial.begin(115200);
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
     Serial.println("ChoCo MIDI Controller Starting...");
+#endif
     
     //Initialize MIDI first
     setupMIDI();
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
     Serial.println("MIDI initialized");
+#endif
     
     setupControls();
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
     Serial.println("Controls initialized");
+#endif
     
     setupDisplay();
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
     Serial.println("Display initialized");
+#endif
     
     drawSplashScreen();
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
     Serial.println("Setup complete - entering main loop");
+#endif
 }
 
 void loop() {
@@ -56,14 +66,22 @@ void loop() {
             cycleInversionForDegree(degree);
             const int inv = getInversionForDegree(degree);
             showStatus(String("Deg ") + degree + " Inv: " + inv, 800);
+        } else if (cButtonHeld && key == 'A') {
+            toggleChordLatchMode();
+            showStatus(String("Latch: ") + (isChordLatchMode() ? "ON" : "OFF"), 800);
+            if (!isChordLatchMode() && controls.rawKey == NO_KEY) {
+                stopCurrentChord();
+                activeKey = NO_KEY;
+                releaseStart = 0;
+            }
         } else if (!cButtonHeld && key >= '0' && key <= '6') {
             const int* varIntervals = nullptr;
             int varSize = 0;
             const char* varName = nullptr;
             const JoystickDirection direction = controls.joyDirectionInstant;
-            const bool hasVariation = getChordVariationForDirection(direction, varIntervals, varSize, varName);
-
             const int degree = key - '0';
+            const bool hasVariation = getChordVariationForDirection(direction, degree, varIntervals, varSize, varName);
+
             if (hasVariation) {
                 primeJoystickDirection(direction);
                 playChordForDegreeWithIntervals(degree, varIntervals, varSize, varName);
@@ -87,12 +105,15 @@ void loop() {
         lastYValue = controls.joyY;
     }
 
-    handleJoystick(controls.joyX, controls.joyY, cButtonHeld, controls.joyBtnHeld);
+    handleJoystick(controls.joyX, controls.joyY, cButtonHeld, controls.joyBtnHeld, controls.rawKey);
 
     // Stop chord when key is released (debounced)
     if (activeKey != NO_KEY) {
         if (controls.rawKey == NO_KEY) {
-            if (releaseStart == 0) {
+            if (isChordLatchMode()) {
+                activeKey = NO_KEY;
+                releaseStart = 0;
+            } else if (releaseStart == 0) {
                 releaseStart = millis();
             } else if (millis() - releaseStart > 50) {
                 stopCurrentChord();

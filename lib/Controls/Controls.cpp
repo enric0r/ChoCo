@@ -32,6 +32,33 @@ static unsigned long lastJoystickMoveTime = 0;
 static JoystickDirection g_lastDirection = JoystickDirection::Center;
 static bool g_lastBtnHeld = false;
 static unsigned long g_lastIgnoreLog = 0;
+
+enum class JoystickChordMode : uint8_t {
+  Default = 0,
+  Extended,
+  Chromatic
+};
+
+static JoystickChordMode g_joystickChordMode = JoystickChordMode::Default;
+
+static const char* joystickModeName(JoystickChordMode mode) {
+  switch (mode) {
+    case JoystickChordMode::Default: return "DEFAULT";
+    case JoystickChordMode::Extended: return "EXTEND";
+    case JoystickChordMode::Chromatic: return "CHROM";
+    default: return "DEFAULT";
+  }
+}
+
+static void cycleJoystickChordMode() {
+  if (g_joystickChordMode == JoystickChordMode::Default) {
+    g_joystickChordMode = JoystickChordMode::Extended;
+  } else if (g_joystickChordMode == JoystickChordMode::Extended) {
+    g_joystickChordMode = JoystickChordMode::Chromatic;
+  } else {
+    g_joystickChordMode = JoystickChordMode::Default;
+  }
+}
 static constexpr JoystickClassifierConfig kJoystickConfig = {
   JOYSTICK_CENTER_X,
   JOYSTICK_CENTER_Y,
@@ -239,38 +266,107 @@ JoystickDirection classifyJoystickDirectionInstant(int x, int y) {
   return classifyJoystickDirectionInstantWithConfig(x, y, kJoystickConfig);
 }
 
-struct VariationMapping {
-  JoystickDirection direction;
-  const int* intervals;
-  int size;
-  const char* name;
-};
+static bool isMajorLikeQuality(TriadQuality quality) {
+  return quality == TRIAD_QUALITY_MAJOR || quality == TRIAD_QUALITY_AUGMENTED;
+}
 
-static const VariationMapping kVariationMappings[] = {
-  {JoystickDirection::Up, CHORD_MAJ7, 4, "Maj7"},
-  {JoystickDirection::Down, CHORD_MIN7, 4, "Min7"},
-  {JoystickDirection::Left, CHORD_SUS2, 3, "Sus2"},
-  {JoystickDirection::Right, CHORD_SUS4, 3, "Sus4"},
-  {JoystickDirection::UpRight, CHORD_DOM9, 5, "9"},
-  {JoystickDirection::UpLeft, CHORD_DOM11, 5, "11"},
-  {JoystickDirection::DownRight, CHORD_MIN9, 5, "Min9"},
-  {JoystickDirection::DownLeft, CHORD_DIM, 3, "Dim"},
-};
-
-bool getChordVariationForDirection(JoystickDirection direction, const int*& intervals, int& size, const char*& name) {
-  for (const auto& mapping : kVariationMappings) {
-    if (mapping.direction == direction) {
-      intervals = mapping.intervals;
-      size = mapping.size;
-      name = mapping.name;
-      return true;
-    }
-  }
-
+bool getChordVariationForDirection(JoystickDirection direction, int degree, const int*& intervals, int& size, const char*& name) {
   intervals = nullptr;
   size = 0;
   name = nullptr;
-  return false;
+
+  if (direction == JoystickDirection::Center) {
+    return false;
+  }
+
+  const TriadQuality baseQuality = getTriadQualityForDegree(degree);
+  const bool majorLike = isMajorLikeQuality(baseQuality);
+
+  if (g_joystickChordMode == JoystickChordMode::Default) {
+    switch (direction) {
+      case JoystickDirection::Up:
+        intervals = majorLike ? CHORD_MIN : CHORD_MAJ;
+        size = 3;
+        name = majorLike ? "Min" : "Maj";
+        return true;
+      case JoystickDirection::Down:
+        intervals = CHORD_SUS4; size = 3; name = "Sus4"; return true;
+      case JoystickDirection::Left:
+        intervals = majorLike ? CHORD_DIM : CHORD_MIN;
+        size = 3;
+        name = majorLike ? "Dim" : "Min";
+        return true;
+      case JoystickDirection::Right:
+        intervals = majorLike ? CHORD_MAJ7 : CHORD_MIN7;
+        size = 4;
+        name = majorLike ? "Maj7" : "Min7";
+        return true;
+      case JoystickDirection::UpLeft:
+        intervals = CHORD_AUG; size = 3; name = "Aug"; return true;
+      case JoystickDirection::UpRight:
+        intervals = CHORD_DOM7; size = 4; name = "Dom7"; return true;
+      case JoystickDirection::DownLeft:
+        intervals = majorLike ? CHORD_MAJ6 : CHORD_SUS2;
+        size = majorLike ? 4 : 3;
+        name = majorLike ? "Maj6" : "Sus2";
+        return true;
+      case JoystickDirection::DownRight:
+        intervals = majorLike ? CHORD_MAJ9 : CHORD_MIN9;
+        size = 5;
+        name = majorLike ? "Maj9" : "Min9";
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  if (g_joystickChordMode == JoystickChordMode::Extended) {
+    switch (direction) {
+      case JoystickDirection::Up:
+        intervals = majorLike ? CHORD_MIN : CHORD_MAJ;
+        size = 3;
+        name = majorLike ? "Min" : "Maj";
+        return true;
+      case JoystickDirection::Down:
+        intervals = CHORD_DOM7_SHARP9; size = 5; name = "7#9"; return true;
+      case JoystickDirection::Left:
+        intervals = CHORD_SUS4_7; size = 4; name = "Sus4+7"; return true;
+      case JoystickDirection::Right:
+        intervals = CHORD_ADD11; size = 4; name = "Add11"; return true;
+      case JoystickDirection::UpLeft:
+        intervals = CHORD_HALFDIM7; size = 4; name = "m7b5"; return true;
+      case JoystickDirection::UpRight:
+        intervals = CHORD_DOM9; size = 5; name = "Dom9"; return true;
+      case JoystickDirection::DownLeft:
+        intervals = CHORD_ADD9; size = 4; name = "Add9"; return true;
+      case JoystickDirection::DownRight:
+        intervals = CHORD_MIN11; size = 5; name = "Min11"; return true;
+      default:
+        return false;
+    }
+  }
+
+  // Chromatic mode
+  switch (direction) {
+    case JoystickDirection::Up:
+      intervals = CHORD_MIN_MAJ7; size = 4; name = "mMaj7"; return true;
+    case JoystickDirection::Down:
+      intervals = CHORD_MAJ13; size = 5; name = "Maj13"; return true;
+    case JoystickDirection::Left:
+      intervals = CHORD_HALFDIM7; size = 4; name = "m7b5"; return true;
+    case JoystickDirection::Right:
+      intervals = CHORD_SIX_NINE; size = 5; name = "6/9"; return true;
+    case JoystickDirection::UpLeft:
+      intervals = CHORD_MAJ7_SHARP11; size = 5; name = "Maj7#11"; return true;
+    case JoystickDirection::UpRight:
+      intervals = CHORD_DOM13; size = 5; name = "Dom13"; return true;
+    case JoystickDirection::DownLeft:
+      intervals = CHORD_DOM7_FLAT9; size = 5; name = "7b9"; return true;
+    case JoystickDirection::DownRight:
+      intervals = CHORD_DOM7_ALT; size = 5; name = "7alt"; return true;
+    default:
+      return false;
+  }
 }
 
 static bool isHorizontalDirection(JoystickDirection direction) {
@@ -291,7 +387,8 @@ static void applyChordVariation(JoystickDirection direction) {
   const int* intervals = nullptr;
   int size = 0;
   const char* name = nullptr;
-  if (!getChordVariationForDirection(direction, intervals, size, name)) {
+  const int activeDegree = getActiveChordDegree();
+  if (!getChordVariationForDirection(direction, activeDegree, intervals, size, name)) {
     return;
   }
 
@@ -299,16 +396,21 @@ static void applyChordVariation(JoystickDirection direction) {
   Serial.print("Applying variation: "); Serial.println(name);
 #endif
 
-  const int root = getActiveChordRoot();
-  playChord(root, intervals, size, String(name));
+  if (isValidDegree(activeDegree)) {
+    playChordForDegreeWithIntervals(activeDegree, intervals, size, name);
+  } else {
+    const int root = getActiveChordRoot();
+    playChord(root, intervals, size, name);
+  }
 }
 
-void handleJoystick(int x, int y, bool cHeld, bool held) {
+void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
   bool &lastBtnHeld = g_lastBtnHeld;
   unsigned long &lastIgnoreLog = g_lastIgnoreLog;
   static unsigned long btnPressStartTime = 0;
   static bool longPressHandled = false;
   static bool cHeldAtPress = false;
+  static char keyAtPress = NO_KEY;
 
   if (held != lastBtnHeld) {
     if (held && !lastBtnHeld) {
@@ -316,13 +418,17 @@ void handleJoystick(int x, int y, bool cHeld, bool held) {
       btnPressStartTime = millis();
       longPressHandled = false;
       cHeldAtPress = cHeld; // Remember if C was held when button was pressed
+      keyAtPress = rawKey;
     } else if (!held && lastBtnHeld) {
       // Button just released
       unsigned long pressDuration = millis() - btnPressStartTime;
       
-      // Only toggle bass mode if C was held during the press
-      if (!longPressHandled && pressDuration < 500 && cHeldAtPress) {
-        // Short press with C held - toggle bass mode
+      // Short press with C + A held toggles strum mode.
+      // Short press with only C held toggles bass mode.
+      if (!longPressHandled && pressDuration < 500 && cHeldAtPress && keyAtPress == 'A') {
+        toggleStrumMode();
+        showStatus(String("Strum: ") + (isStrumMode() ? "ON" : "OFF"), 600);
+      } else if (!longPressHandled && pressDuration < 500 && cHeldAtPress) {
         toggleBassMode();
         showStatus(String("Bass: ") + (isBassMode() ? "ON" : "OFF"), 500);
       }
@@ -332,9 +438,16 @@ void handleJoystick(int x, int y, bool cHeld, bool held) {
   
   // Check for long press while held - only if C was held at press time
   if (held && !longPressHandled && cHeldAtPress && (millis() - btnPressStartTime > 1000)) {
-    // Long press with C held - toggle auto-voicing
+    // Long press with C held - toggle smart voicing.
     toggleAutoVoicingMode();
-    showStatus(String("AutoVoice: ") + (isAutoVoicingMode() ? "ON" : "OFF"), 800);
+    showStatus(String("SmartVoice: ") + (isAutoVoicingMode() ? "ON" : "OFF"), 800);
+    longPressHandled = true;
+  }
+
+  // Long press without C held toggles single note mode.
+  if (held && !longPressHandled && !cHeldAtPress && (millis() - btnPressStartTime > 1000)) {
+    toggleSingleNoteMode();
+    showStatus(String("Note: ") + (isSingleNoteMode() ? "ON" : "OFF"), 800);
     longPressHandled = true;
   }
 
@@ -379,12 +492,65 @@ void handleJoystick(int x, int y, bool cHeld, bool held) {
     }
   }
 
-  // If direction changed, apply variation. Apply immediately on first move out of center;
-  // otherwise respect the (reduced) grace period to avoid jitter.
+  // C + Down cycles joystick chord mode.
+  static JoystickDirection lastModeDirection = JoystickDirection::Center;
+  static unsigned long lastModeChangeTime = 0;
+  if (cHeld && direction == JoystickDirection::Down) {
+    if (direction != lastModeDirection && (millis() - lastModeChangeTime >= JOYSTICK_GRACE_PERIOD)) {
+      cycleJoystickChordMode();
+      showStatus(String("Joy: ") + joystickModeName(g_joystickChordMode), 700);
+      lastModeDirection = direction;
+      lastModeChangeTime = millis();
+      updateJoystickState();
+      return;
+    }
+    if (direction == lastModeDirection) {
+      updateJoystickState();
+      return;
+    }
+  } else if (!cHeld || direction == JoystickDirection::Center) {
+    lastModeDirection = JoystickDirection::Center;
+  }
+
+  // Chromatic mode bonus: when no chord is held, left/right shifts key by semitone.
+  static JoystickDirection lastChromaticDirection = JoystickDirection::Center;
+  static unsigned long lastChromaticShiftTime = 0;
+  if (!cHeld && g_joystickChordMode == JoystickChordMode::Chromatic && !isChordActive() && isHorizontalDirection(direction)) {
+    if (direction != lastChromaticDirection && (millis() - lastChromaticShiftTime >= JOYSTICK_GRACE_PERIOD)) {
+      int step = (direction == JoystickDirection::Right) ? 1 : -1;
+      setCurrentRootNote(getCurrentRootNote() + step);
+      showStatus(String("Root: ") + getNoteName(getCurrentRootNote()), 500);
+      lastChromaticDirection = direction;
+      lastChromaticShiftTime = millis();
+      updateJoystickState();
+      return;
+    }
+    if (direction == lastChromaticDirection) {
+      updateJoystickState();
+      return;
+    }
+  } else if (direction == JoystickDirection::Center || cHeld || isChordActive()) {
+    lastChromaticDirection = JoystickDirection::Center;
+  }
+
+  // If direction changed, apply/reset variation.
   bool changed = (direction != g_lastDirection);
   bool firstNonZero = (g_lastDirection == JoystickDirection::Center && direction != JoystickDirection::Center);
-  if (changed && (firstNonZero || (millis() - lastJoystickMoveTime >= JOYSTICK_GRACE_PERIOD))) {
-    // Only require that a chord is currently active; do not require the joy button
+  if (!changed) {
+    return;
+  }
+
+  // Return to base triad when joystick returns to center while a degree chord is active.
+  if (direction == JoystickDirection::Center) {
+    int activeDegree = getActiveChordDegree();
+    if (isChordActive() && isValidDegree(activeDegree)) {
+      playChordForDegree(activeDegree);
+    }
+    updateJoystickState();
+    return;
+  }
+
+  if (firstNonZero || (millis() - lastJoystickMoveTime >= JOYSTICK_GRACE_PERIOD)) {
     if (!isChordActive()) {
       if (millis() - lastIgnoreLog > 1000) {
 #if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
