@@ -22,19 +22,27 @@ const uint16_t TRIAD_AUG = BIT(0) | BIT(4) | BIT(8); // 1-3-#5
 const uint16_t TRIAD_SUS2 = BIT(0) | BIT(2) | BIT(7); // 1-2-5
 const uint16_t TRIAD_SUS4 = BIT(0) | BIT(5) | BIT(7); // 1-4-5
 
+static constexpr int kMaxChordNotes = 5;
+
 static Chord currentChord = {{0}, 0, 0, ""};
 static int rootNote = BASE_NOTE;
 static ScaleType currentScale = SCALE_IONIAN;
 static int currentInversion = 0;
 static bool bassMode = BASS_MODE_ENABLED_DEFAULT;
 static int bassNote = -1; // Track active bass note (-1 = none)
+static bool chordLatchMode = CHORD_LATCH_ENABLED_DEFAULT;
+static bool strumMode = STRUM_MODE_ENABLED_DEFAULT;
+static bool singleNoteMode = SINGLE_NOTE_MODE_ENABLED_DEFAULT;
+static int activeChordDegree = -1; // Degree (0..6) of currently active chord when known
 
 // Per-chord inversion memory: stores inversion for each degree (0-6)
 static int chordInversions[7] = {0, 0, 0, 0, 0, 0, 0};
 
-// Auto-voicing mode: automatically selects inversions to keep within octave
-static bool autoVoicingMode = AUTO_VOICING_ENABLED_DEFAULT;
-static int lastPlayedNote = BASE_NOTE; // Track last note for voice leading
+// Voicing mode.
+static VoicingMode voicingMode = AUTO_VOICING_ENABLED_DEFAULT ? VOICING_SMART : VOICING_CLASSIC;
+static int previousVoicedNotes[kMaxChordNotes] = {0};
+static int previousVoicedSize = 0;
+static bool hasPreviousVoicing = false;
 // Octave offset: adjusts all chords up/down by octaves (-2 to +2)
 static int octaveOffset = 0;
 // Chord history: circular buffer storing last 6 chords
@@ -52,13 +60,282 @@ const int CHORD_SUS4[] = {0, 5, 7};
 const int CHORD_MAJ7[] = {0, 4, 7, 11};
 const int CHORD_MIN7[] = {0, 3, 7, 10};
 const int CHORD_SUS2[] = {0, 2, 7};
+const int CHORD_MAJ6[] = {0, 4, 7, 9};
+const int CHORD_MAJ9[] = {0, 4, 7, 11, 14};
 const int CHORD_DOM7[] = {0, 4, 7, 10};
 const int CHORD_DOM9[] = {0, 4, 7, 10, 14};
 const int CHORD_DOM11[] = {0, 4, 7, 10, 17};
 const int CHORD_MIN9[] = {0, 3, 7, 10, 14};
+const int CHORD_SUS4_7[] = {0, 5, 7, 10};
+const int CHORD_ADD11[] = {0, 4, 7, 17};
+const int CHORD_HALFDIM7[] = {0, 3, 6, 10};
+const int CHORD_DOM7_SHARP9[] = {0, 4, 7, 10, 15};
+const int CHORD_ADD9[] = {0, 4, 7, 14};
+const int CHORD_MIN11[] = {0, 3, 7, 10, 17};
+const int CHORD_MIN_MAJ7[] = {0, 3, 7, 11};
+const int CHORD_MAJ13[] = {0, 4, 7, 11, 21};
+const int CHORD_SIX_NINE[] = {0, 4, 7, 9, 14};
+const int CHORD_MAJ7_SHARP11[] = {0, 4, 7, 11, 18};
+const int CHORD_DOM13[] = {0, 4, 7, 10, 21};
+const int CHORD_DOM7_FLAT9[] = {0, 4, 7, 10, 13};
+const int CHORD_DOM7_ALT[] = {0, 4, 8, 10, 13};
+
+static const uint8_t* getScaleIntervals(ScaleType t) {
+  switch (t) {
+    case SCALE_IONIAN:         return IONIAN_INTERVALS;
+    case SCALE_DORIAN:         return DORIAN_INTERVALS;
+    case SCALE_PHRYGIAN:       return PHRYGIAN_INTERVALS;
+    case SCALE_LYDIAN:         return LYDIAN_INTERVALS;
+    case SCALE_MIXOLYDIAN:     return MIXOLYDIAN_INTERVALS;
+    case SCALE_AEOLIAN:        return AEOLIAN_INTERVALS;
+    case SCALE_LOCRIAN:        return LOCRIAN_INTERVALS;
+    case SCALE_HARMONIC_MINOR: return HARM_MIN_INTERVALS;
+    case SCALE_MELODIC_MINOR:  return MELO_MIN_INTERVALS;
+    default:                   return IONIAN_INTERVALS;
+  }
+}
+
+static TriadQuality triadQualityFromScaleDegree(int degree, const uint8_t* scale) {
+  if (scale == nullptr) return TRIAD_QUALITY_UNKNOWN;
+  int d = degree % 7;
+  if (d < 0) d += 7;
+
+  const int third = scale[(d + 2) % 7];
+  const int fifth = scale[(d + 4) % 7];
+  const int thirdInt = (third - scale[d] + 12) % 12;
+  const int fifthInt = (fifth - scale[d] + 12) % 12;
+
+  if (thirdInt == 4 && fifthInt == 7) return TRIAD_QUALITY_MAJOR;
+  if (thirdInt == 3 && fifthInt == 7) return TRIAD_QUALITY_MINOR;
+  if (thirdInt == 3 && fifthInt == 6) return TRIAD_QUALITY_DIMINISHED;
+  if (thirdInt == 4 && fifthInt == 8) return TRIAD_QUALITY_AUGMENTED;
+  return TRIAD_QUALITY_UNKNOWN;
+}
+
+static void triadFromScaleDegree(int degree, const uint8_t* scale, const int*& intervals, int& size, const char*& name) {
+  switch (triadQualityFromScaleDegree(degree, scale)) {
+    case TRIAD_QUALITY_MAJOR:
+      intervals = CHORD_MAJ; size = 3; name = "Maj"; break;
+    case TRIAD_QUALITY_MINOR:
+      intervals = CHORD_MIN; size = 3; name = "Min"; break;
+    case TRIAD_QUALITY_DIMINISHED:
+      intervals = CHORD_DIM; size = 3; name = "Dim"; break;
+    case TRIAD_QUALITY_AUGMENTED:
+      intervals = CHORD_AUG; size = 3; name = "Aug"; break;
+    default:
+      intervals = CHORD_MIN; size = 3; name = "Min"; break;
+  }
+}
 
 bool isValidDegree(int degree) {
   return isValidDegreeIndex(degree);
+}
+
+static bool noteInSet(int note, const int* notes, int size) {
+  for (int i = 0; i < size; i++) {
+    if (notes[i] == note) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void sortNotesAscending(int* notes, int size) {
+  for (int i = 1; i < size; i++) {
+    int key = notes[i];
+    int j = i - 1;
+    while (j >= 0 && notes[j] > key) {
+      notes[j + 1] = notes[j];
+      j--;
+    }
+    notes[j + 1] = key;
+  }
+}
+
+static void emitChordNoteOns(const int* notes, int size, uint8_t velocity) {
+  if (notes == nullptr || size <= 0) return;
+
+  if (!strumMode || size <= 1) {
+    for (int i = 0; i < size; i++) {
+      midiNoteOn(notes[i], velocity);
+    }
+    return;
+  }
+
+  int ordered[kMaxChordNotes] = {0};
+  for (int i = 0; i < size; i++) {
+    ordered[i] = notes[i];
+  }
+  sortNotesAscending(ordered, size);
+
+  for (int i = 0; i < size; i++) {
+    midiNoteOn(ordered[i], velocity);
+    if (i + 1 < size && STRUM_NOTE_DELAY_MS > 0) {
+      delay(STRUM_NOTE_DELAY_MS);
+    }
+  }
+}
+
+static bool buildVoicedCandidate(int root, const int* intervals, int size, int inversion, int* outNotes) {
+  if (intervals == nullptr || outNotes == nullptr || size <= 0 || size > kMaxChordNotes) {
+    return false;
+  }
+  if (inversion < 0 || inversion >= size) {
+    return false;
+  }
+
+  for (int i = 0; i < size; i++) {
+    int note = root + intervals[i];
+    if (i < inversion) {
+      note += 12;
+    }
+    if (note < 0 || note > 127) {
+      return false;
+    }
+    outNotes[i] = note;
+  }
+  return true;
+}
+
+static int nearestDistanceToSet(int note, const int* setNotes, int setSize) {
+  if (setSize <= 0) return 12;
+  int best = 127;
+  for (int i = 0; i < setSize; i++) {
+    int d = abs(note - setNotes[i]);
+    if (d < best) {
+      best = d;
+    }
+  }
+  return best;
+}
+
+static int computeMotionCost(const int* candidate, int candSize) {
+  if (!hasPreviousVoicing || previousVoicedSize <= 0) return 0;
+
+  int cost = 0;
+  for (int i = 0; i < candSize; i++) {
+    cost += nearestDistanceToSet(candidate[i], previousVoicedNotes, previousVoicedSize);
+  }
+  for (int j = 0; j < previousVoicedSize; j++) {
+    cost += nearestDistanceToSet(previousVoicedNotes[j], candidate, candSize);
+  }
+  return cost;
+}
+
+static int countCommonTones(const int* candidate, int candSize) {
+  if (!hasPreviousVoicing || previousVoicedSize <= 0) return 0;
+
+  bool matchedPrev[kMaxChordNotes] = {false, false, false, false, false};
+  int common = 0;
+  for (int i = 0; i < candSize; i++) {
+    for (int j = 0; j < previousVoicedSize; j++) {
+      if (!matchedPrev[j] && candidate[i] == previousVoicedNotes[j]) {
+        matchedPrev[j] = true;
+        common++;
+        break;
+      }
+    }
+  }
+  return common;
+}
+
+static int computeRangePenalty(const int* candidate, int candSize) {
+  int penalty = 0;
+  for (int i = 0; i < candSize; i++) {
+    if (candidate[i] < SMART_VOICING_RANGE_MIN) {
+      penalty += (SMART_VOICING_RANGE_MIN - candidate[i]);
+    } else if (candidate[i] > SMART_VOICING_RANGE_MAX) {
+      penalty += (candidate[i] - SMART_VOICING_RANGE_MAX);
+    }
+  }
+  return penalty;
+}
+
+static int computeSpanPenalty(const int* candidate, int candSize) {
+  if (candSize <= 1) return 0;
+  int low = candidate[0];
+  int high = candidate[0];
+  for (int i = 1; i < candSize; i++) {
+    if (candidate[i] < low) low = candidate[i];
+    if (candidate[i] > high) high = candidate[i];
+  }
+  const int span = high - low;
+  return abs(span - SMART_TARGET_SPAN);
+}
+
+static int scoreVoicedCandidate(const int* candidate, int candSize) {
+  const int motion = computeMotionCost(candidate, candSize);
+  const int commonTones = countCommonTones(candidate, candSize);
+  const int rangePenalty = computeRangePenalty(candidate, candSize);
+  const int spanPenalty = computeSpanPenalty(candidate, candSize);
+
+  int score = 0;
+  score -= motion * SMART_WEIGHT_MOTION;
+  score += commonTones * SMART_WEIGHT_COMMON_TONE;
+  score -= rangePenalty * SMART_WEIGHT_RANGE;
+  score -= spanPenalty * SMART_WEIGHT_SPAN;
+  return score;
+}
+
+static void chooseSmartVoicing(int baseRoot, const int* intervals, int size, int& selectedRoot, int& selectedInversion) {
+  if (intervals == nullptr || size <= 0 || size > kMaxChordNotes) {
+    selectedRoot = baseRoot;
+    selectedInversion = 0;
+    return;
+  }
+
+  int bestScore = -1000000000;
+  int bestRoot = baseRoot;
+  int bestInversion = 0;
+  int candidateNotes[kMaxChordNotes] = {0};
+
+  for (int octaveShift = SMART_VOICING_OCTAVE_MIN; octaveShift <= SMART_VOICING_OCTAVE_MAX; octaveShift++) {
+    const int testRoot = baseRoot + (octaveShift * 12);
+
+    for (int inversion = 0; inversion < size; inversion++) {
+      if (!buildVoicedCandidate(testRoot, intervals, size, inversion, candidateNotes)) {
+        continue;
+      }
+
+      const int score = scoreVoicedCandidate(candidateNotes, size);
+      if (score > bestScore) {
+        bestScore = score;
+        bestRoot = testRoot;
+        bestInversion = inversion;
+      }
+    }
+  }
+
+  selectedRoot = bestRoot;
+  selectedInversion = bestInversion;
+}
+
+static void playVoicedIntervalsForDegree(int degree, int baseRoot, const int* intervals, int size, const char* chordName, const char* debugTag) {
+  if (!isValidDegree(degree) || intervals == nullptr || size <= 0 || size > kMaxChordNotes) {
+    return;
+  }
+
+  int root = baseRoot;
+  int inversionToUse = chordInversions[degree];
+
+  if (voicingMode == VOICING_SMART) {
+    chooseSmartVoicing(root, intervals, size, root, inversionToUse);
+    currentInversion = inversionToUse;
+
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
+    Serial.print(debugTag);
+    Serial.print(" degree=");
+    Serial.print(degree);
+    Serial.print(" root=");
+    Serial.print(root);
+    Serial.print(" inversion=");
+    Serial.println(inversionToUse);
+#endif
+  } else {
+    currentInversion = inversionToUse;
+  }
+
+  playChord(root, intervals, size, chordName);
 }
 
 void playChordForDegree(int degree) {
@@ -66,261 +343,157 @@ void playChordForDegree(int degree) {
     return;
   }
 
-  stopCurrentChord();
+  if (singleNoteMode) {
+    playSingleNoteForDegree(degree);
+    return;
+  }
   
-  // Resolve current scale intervals
-  auto getIntervals = [](ScaleType t) -> const uint8_t* {
-    switch (t) {
-      case SCALE_IONIAN:         return IONIAN_INTERVALS;
-      case SCALE_DORIAN:         return DORIAN_INTERVALS;
-      case SCALE_PHRYGIAN:       return PHRYGIAN_INTERVALS;
-      case SCALE_LYDIAN:         return LYDIAN_INTERVALS;
-      case SCALE_MIXOLYDIAN:     return MIXOLYDIAN_INTERVALS;
-      case SCALE_AEOLIAN:        return AEOLIAN_INTERVALS;
-      case SCALE_LOCRIAN:        return LOCRIAN_INTERVALS;
-      case SCALE_HARMONIC_MINOR: return HARM_MIN_INTERVALS;
-      case SCALE_MELODIC_MINOR:  return MELO_MIN_INTERVALS;
-      default:                   return IONIAN_INTERVALS;
-    }
-  };
-
-  const uint8_t* scale = getIntervals(currentScale);
+  const uint8_t* scale = getScaleIntervals(currentScale);
   int root = rootNote + scale[degree];
   
   // Apply octave offset
   root += (octaveOffset * 12);
 
-  // Determine triad quality by inspecting 1-3-5 of the current scale at this degree
-  auto triadFromScale = [&](int deg, const int* &intervals, int &size, const char* &name) {
-    int d = deg % 7; if (d < 0) d += 7;
-    int third = scale[(d + 2) % 7];
-    int fifth = scale[(d + 4) % 7];
-    int thirdInt = (third - scale[d] + 12) % 12;
-    int fifthInt = (fifth - scale[d] + 12) % 12;
-    if (thirdInt == 4 && fifthInt == 7) { intervals = CHORD_MAJ; size = 3; name = "Maj"; }
-    else if (thirdInt == 3 && fifthInt == 7) { intervals = CHORD_MIN; size = 3; name = "Min"; }
-    else if (thirdInt == 3 && fifthInt == 6) { intervals = CHORD_DIM; size = 3; name = "Dim"; }
-    else if (thirdInt == 4 && fifthInt == 8) { intervals = CHORD_AUG; size = 3; name = "Aug"; }
-    else { intervals = CHORD_MIN; size = 3; name = "Min"; } // fallback
-  };
-
   const int* triad = nullptr; int triadSize = 0; const char* triadName = "";
-  triadFromScale(degree, triad, triadSize, triadName);
-  
-  // Determine inversion to use
-  int inversionToUse = chordInversions[degree];
-  
-  // If auto-voicing is enabled, calculate best inversion and octave to stay in range
-  if (autoVoicingMode) {
-    // Try different octaves and inversions to find the best fit
-    int bestInversion = 0;
-    int bestOctave = 0;
-    int bestScore = -10000;
-    
-    // Try octaves from -1 to +1 relative to current root
-    for (int octaveShift = -1; octaveShift <= 1; octaveShift++) {
-      int testRoot = root + (octaveShift * 12);
-      
-      // Try each inversion
-      for (int testInv = 0; testInv < 3; testInv++) {
-        int lowestNote = 127;
-        int highestNote = 0;
-        
-        // Calculate actual notes for this combination
-        for (int i = 0; i < triadSize; i++) {
-          int testNote = testRoot + triad[i];
-          if (i < testInv) testNote += 12;
-          if (testNote < lowestNote) lowestNote = testNote;
-          if (testNote > highestNote) highestNote = testNote;
-        }
-        
-        // Score this combination
-        int score = 0;
-        
-        // Heavily prefer combinations that keep ALL notes within the target range
-        bool inRange = (lowestNote >= AUTO_VOICING_MIN_NOTE && highestNote <= AUTO_VOICING_MAX_NOTE);
-        if (inRange) {
-          score += 10000;
-        } else {
-          // Heavy penalty for notes outside range
-          if (lowestNote < AUTO_VOICING_MIN_NOTE) score -= (AUTO_VOICING_MIN_NOTE - lowestNote) * 100;
-          if (highestNote > AUTO_VOICING_MAX_NOTE) score -= (highestNote - AUTO_VOICING_MAX_NOTE) * 100;
-        }
-        
-        // Prefer smoother voice leading (closer to last played note)
-        int distance = abs(lowestNote - lastPlayedNote);
-        score -= distance;
-        
-        if (score > bestScore) {
-          bestScore = score;
-          bestInversion = testInv;
-          bestOctave = octaveShift;
-        }
-      }
-    }
-    
-    // Apply the best octave shift to the root
-    root = root + (bestOctave * 12);
-    inversionToUse = bestInversion;
-  currentInversion = inversionToUse;
-    
-#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
-    Serial.print("Auto-voicing: degree=");
-    Serial.print(degree);
-    Serial.print(" root=");
-    Serial.print(root);
-    Serial.print(" octave=");
-    Serial.print(bestOctave);
-    Serial.print(" inversion=");
-    Serial.println(bestInversion);
-#endif
-  } else {
-    // Use the stored inversion for this degree
-    currentInversion = inversionToUse;
-  }
+  triadFromScaleDegree(degree, scale, triad, triadSize, triadName);
 
-  // Play triad determined by current scale
-  playChord(root, triad, triadSize, String(triadName));
-  
-  // Update last played note for voice leading
-  if (currentChord.size > 0) {
-    lastPlayedNote = currentChord.notes[0];
-  }
+  // Play triad determined by current scale through shared voicing pipeline.
+  playVoicedIntervalsForDegree(degree, root, triad, triadSize, triadName, "Smart voicing");
+  activeChordDegree = degree;
 }
 
 // Variant: play a specific degree but with custom chord intervals (e.g., Maj7/Sus)
 void playChordForDegreeWithIntervals(int degree, const int* forcedIntervals, int forcedSize, const char* forcedName) {
-  if (!isValidDegree(degree) || forcedIntervals == nullptr || forcedSize <= 0) {
+  if (!isValidDegree(degree)) {
     return;
   }
 
-  stopCurrentChord();
+  if (singleNoteMode) {
+    playSingleNoteForDegree(degree);
+    return;
+  }
 
-  // Resolve current scale intervals
-  auto getIntervals = [](ScaleType t) -> const uint8_t* {
-    switch (t) {
-      case SCALE_IONIAN:         return IONIAN_INTERVALS;
-      case SCALE_DORIAN:         return DORIAN_INTERVALS;
-      case SCALE_PHRYGIAN:       return PHRYGIAN_INTERVALS;
-      case SCALE_LYDIAN:         return LYDIAN_INTERVALS;
-      case SCALE_MIXOLYDIAN:     return MIXOLYDIAN_INTERVALS;
-      case SCALE_AEOLIAN:        return AEOLIAN_INTERVALS;
-      case SCALE_LOCRIAN:        return LOCRIAN_INTERVALS;
-      case SCALE_HARMONIC_MINOR: return HARM_MIN_INTERVALS;
-      case SCALE_MELODIC_MINOR:  return MELO_MIN_INTERVALS;
-      default:                   return IONIAN_INTERVALS;
-    }
-  };
+  if (forcedIntervals == nullptr || forcedSize <= 0 || forcedSize > kMaxChordNotes) {
+    return;
+  }
 
-  const uint8_t* scale = getIntervals(currentScale);
+  const uint8_t* scale = getScaleIntervals(currentScale);
   int root = rootNote + scale[degree];
   
   // Apply octave offset
   root += (octaveOffset * 12);
 
-  // Determine inversion to use
-  int inversionToUse = chordInversions[degree];
-
-  // Auto-voicing support using the provided intervals
-  if (autoVoicingMode) {
-    int bestInversion = 0;
-    int bestOctave = 0;
-    int bestScore = -10000;
-    for (int octaveShift = -1; octaveShift <= 1; octaveShift++) {
-      int testRoot = root + (octaveShift * 12);
-      for (int testInv = 0; testInv < 3; testInv++) {
-        int lowestNote = 127, highestNote = 0;
-        for (int i = 0; i < forcedSize; i++) {
-          int n = testRoot + forcedIntervals[i];
-          if (i < testInv) n += 12;
-          if (n < lowestNote) lowestNote = n;
-          if (n > highestNote) highestNote = n;
-        }
-        int score = 0;
-        bool inRange = (lowestNote >= AUTO_VOICING_MIN_NOTE && highestNote <= AUTO_VOICING_MAX_NOTE);
-        if (inRange) score += 10000; else {
-          if (lowestNote < AUTO_VOICING_MIN_NOTE) score -= (AUTO_VOICING_MIN_NOTE - lowestNote) * 100;
-          if (highestNote > AUTO_VOICING_MAX_NOTE) score -= (highestNote - AUTO_VOICING_MAX_NOTE) * 100;
-        }
-        int distance = abs(lowestNote - lastPlayedNote);
-        score -= distance;
-        if (score > bestScore) { bestScore = score; bestInversion = testInv; bestOctave = octaveShift; }
-      }
-    }
-    root = root + (bestOctave * 12);
-    inversionToUse = bestInversion;
-    currentInversion = inversionToUse;
-#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
-    Serial.print("Auto-voicing (forced): degree="); Serial.print(degree);
-    Serial.print(" root="); Serial.print(root);
-    Serial.print(" octave="); Serial.print(bestOctave);
-    Serial.print(" inversion="); Serial.println(bestInversion);
-#endif
-  } else {
-    currentInversion = inversionToUse;
-  }
-
-  // Play with the provided intervals
-  playChord(root, forcedIntervals, forcedSize, String(forcedName));
-
-  if (currentChord.size > 0) {
-    lastPlayedNote = currentChord.notes[0];
-  }
+  // Play with the provided intervals through shared voicing pipeline.
+  playVoicedIntervalsForDegree(degree, root, forcedIntervals, forcedSize, forcedName, "Smart voicing (forced)");
+  activeChordDegree = degree;
 }
 
-void playChord(int root, const int* intervals, int size, String name) {
-  stopCurrentChord();
-  
-  // Play bass note if bass mode is enabled
-  if (bassMode) {
-    bassNote = root + BASS_OCTAVE_OFFSET;
-    if (bassNote < 0) bassNote = 0;
-    midiNoteOn(bassNote, 80);
+void playChord(int root, const int* intervals, int size, const char* name) {
+  if (intervals == nullptr || size <= 0) {
+    stopCurrentChord();
+    return;
   }
-  
-  for(int i = 0; i < size; i++) {
+  if (size > kMaxChordNotes) {
+    size = kMaxChordNotes;
+  }
+  int inversionToApply = currentInversion;
+  if (inversionToApply < 0) {
+    inversionToApply = 0;
+  } else if (size > 0) {
+    inversionToApply %= size;
+  }
+  currentInversion = inversionToApply;
+
+  int targetNotes[kMaxChordNotes] = {0};
+  for (int i = 0; i < size; i++) {
     int note = root + intervals[i];
-    if (i < currentInversion) {
+    if (i < inversionToApply) {
       note += 12;
     }
-    currentChord.notes[i] = note;
-    midiNoteOn(note, 100);
+    if (note < 0 || note > 127) {
+      return;
+    }
+    targetNotes[i] = note;
+  }
+
+  int nextBassNote = -1;
+  if (bassMode) {
+    nextBassNote = root + BASS_OCTAVE_OFFSET;
+    if (nextBassNote < 0) nextBassNote = 0;
+    if (nextBassNote > 127) nextBassNote = 127;
+  }
+
+  int notesToStart[kMaxChordNotes] = {0};
+  int notesToStartCount = 0;
+  const bool useLegatoTransition = (voicingMode == VOICING_SMART && currentChord.size > 0);
+  if (useLegatoTransition) {
+    // Keep common tones sustained to avoid retrigger artifacts.
+    for (int i = 0; i < currentChord.size; i++) {
+      if (!noteInSet(currentChord.notes[i], targetNotes, size)) {
+        midiNoteOff(currentChord.notes[i], 0);
+      }
+    }
+    for (int i = 0; i < size; i++) {
+      if (!noteInSet(targetNotes[i], currentChord.notes, currentChord.size)) {
+        notesToStart[notesToStartCount++] = targetNotes[i];
+      }
+    }
+    emitChordNoteOns(notesToStart, notesToStartCount, 100);
+
+    if (bassNote >= 0 && bassNote != nextBassNote) {
+      midiNoteOff(bassNote, 0);
+    }
+    if (nextBassNote >= 0 && nextBassNote != bassNote) {
+      midiNoteOn(nextBassNote, 80);
+    }
+    bassNote = nextBassNote;
+  } else {
+    stopCurrentChord();
+    if (nextBassNote >= 0) {
+      bassNote = nextBassNote;
+      midiNoteOn(bassNote, 80);
+    }
+    for (int i = 0; i < size; i++) {
+      notesToStart[notesToStartCount++] = targetNotes[i];
+    }
+    emitChordNoteOns(notesToStart, notesToStartCount, 100);
   }
   
+  for (int i = 0; i < size; i++) {
+    currentChord.notes[i] = targetNotes[i];
+  }
   currentChord.size = size;
   currentChord.root = root;
+
+  const int storedSize = size;
+  for (int i = 0; i < storedSize; i++) {
+    previousVoicedNotes[i] = currentChord.notes[i];
+  }
+  previousVoicedSize = storedSize;
+  hasPreviousVoicing = (storedSize > 0);
   
   // Build chord name with slash notation for inversions
-  currentChord.name = getNoteName(root) + " " + name;
+  const char* chordLabel = (name != nullptr) ? name : "";
+  currentChord.name = String(getNoteName(root)) + " " + chordLabel;
   
   // Add slash chord notation if inverted
   if (currentInversion > 0 && size > 0) {
     // Find the bass note (lowest note after inversion)
     int bassNoteNumber = root + intervals[currentInversion % size];
-    currentChord.name += "/" + getNoteName(bassNoteNumber);
+    currentChord.name += "/";
+    currentChord.name += getNoteName(bassNoteNumber);
   }
 
-#if LOG_CHORDS
   // Determine scale degree by matching root offset to current scale intervals
   int interval = (root - rootNote) % 12;
   if (interval < 0) interval += 12;
-  const uint8_t* scale = nullptr;
-  switch (currentScale) {
-    case SCALE_IONIAN: scale = IONIAN_INTERVALS; break;
-    case SCALE_DORIAN: scale = DORIAN_INTERVALS; break;
-    case SCALE_PHRYGIAN: scale = PHRYGIAN_INTERVALS; break;
-    case SCALE_LYDIAN: scale = LYDIAN_INTERVALS; break;
-    case SCALE_MIXOLYDIAN: scale = MIXOLYDIAN_INTERVALS; break;
-    case SCALE_AEOLIAN: scale = AEOLIAN_INTERVALS; break;
-    case SCALE_LOCRIAN: scale = LOCRIAN_INTERVALS; break;
-    case SCALE_HARMONIC_MINOR: scale = HARM_MIN_INTERVALS; break;
-    case SCALE_MELODIC_MINOR: scale = MELO_MIN_INTERVALS; break;
-    default: scale = IONIAN_INTERVALS; break;
-  }
+  const uint8_t* scale = getScaleIntervals(currentScale);
   int degree = -1;
   for (int i = 0; i < 7; i++) {
     if (scale[i] == interval) { degree = i; break; }
   }
+
+#if LOG_CHORDS
   // Roman numeral helper based on triad quality
   auto romanFor = [&](int deg) -> const char* {
     // recompute triad quality for logging
@@ -374,18 +547,14 @@ void playChord(int root, const int* intervals, int size, String name) {
 
   // Add to history (store root note name + chord name + roman numeral if available)
   String historyEntry = currentChord.name;
-  #if LOG_CHORDS
+  chordHistoryDegrees[historyWriteIndex] = degree; // Store degree for display
+#if LOG_CHORDS
   if (degree >= 0) {
     historyEntry += " (";
     historyEntry += rn;
     historyEntry += ")";
-    chordHistoryDegrees[historyWriteIndex] = degree; // Store degree for display
-  } else {
-    chordHistoryDegrees[historyWriteIndex] = -1; // Unknown degree
   }
-  #else
-  chordHistoryDegrees[historyWriteIndex] = -1;
-  #endif
+#endif
   chordHistory[historyWriteIndex] = historyEntry;
   historyWriteIndex = (historyWriteIndex + 1) % CHORD_HISTORY_SIZE;
   if (historyCount < CHORD_HISTORY_SIZE) historyCount++;
@@ -409,11 +578,13 @@ void stopCurrentChord() {
     midiNoteOff(currentChord.notes[i], 0);
   }
   currentChord.size = 0;
+  activeChordDegree = -1;
 }
 
-String getCurrentChordName() {
+const String& getCurrentChordName() {
   if (currentChord.size == 0) {
-    return "";
+    static const String kEmptyChordName;
+    return kEmptyChordName;
   }
   return currentChord.name;
 }
@@ -478,6 +649,12 @@ void cycleInversionForDegree(int degree) {
   }
 }
 
+TriadQuality getTriadQualityForDegree(int degree) {
+  if (!isValidDegree(degree)) return TRIAD_QUALITY_UNKNOWN;
+  const uint8_t* scale = getScaleIntervals(currentScale);
+  return triadQualityFromScaleDegree(degree, scale);
+}
+
 bool isChordActive() {
   return currentChord.size > 0;
 }
@@ -485,6 +662,11 @@ bool isChordActive() {
 int getActiveChordRoot() {
   if (currentChord.size > 0) return currentChord.root;
   return getCurrentRootNote();
+}
+
+int getActiveChordDegree() {
+  if (!isChordActive()) return -1;
+  return activeChordDegree;
 }
 
 bool isBassMode() {
@@ -497,24 +679,143 @@ void setBassMode(bool enabled) {
 
 void toggleBassMode() {
   bassMode = !bassMode;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
   Serial.print("Bass mode: ");
   Serial.println(bassMode ? "ON" : "OFF");
+#endif
+}
+
+bool isSingleNoteMode() {
+  return singleNoteMode;
+}
+
+void setSingleNoteMode(bool enabled) {
+  if (singleNoteMode == enabled) {
+    return;
+  }
+  singleNoteMode = enabled;
+  // Stop any currently sounding chord/note to avoid mismatched state.
+  stopCurrentChord();
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
+  Serial.print("Single note mode: ");
+  Serial.println(singleNoteMode ? "ON" : "OFF");
+#endif
+}
+
+void toggleSingleNoteMode() {
+  setSingleNoteMode(!singleNoteMode);
+}
+
+void playSingleNoteForDegree(int degree) {
+  if (!isValidDegree(degree)) {
+    return;
+  }
+
+  const uint8_t* scale = getScaleIntervals(currentScale);
+  int note = rootNote + scale[degree];
+  note += (octaveOffset * 12);
+
+  if (note < 0) note = 0;
+  if (note > 127) note = 127;
+
+  if (currentChord.size == 1 && currentChord.notes[0] == note && activeChordDegree == degree) {
+    return;
+  }
+
+  stopCurrentChord();
+  midiNoteOn(note, 100);
+
+  currentChord.notes[0] = note;
+  currentChord.size = 1;
+  currentChord.root = note;
+  currentChord.name = String(getNoteName(note));
+  currentInversion = 0;
+  activeChordDegree = degree;
+
+  previousVoicedNotes[0] = note;
+  previousVoicedSize = 1;
+  hasPreviousVoicing = true;
+
+#if LOG_CHORDS
+  Serial.print("Playing note: ");
+  Serial.print(getNoteName(note));
+  Serial.print(" ("); Serial.print(note); Serial.print(")");
+  Serial.print(" | Degree: ");
+  Serial.println(degree);
+#endif
+
+  chordHistoryDegrees[historyWriteIndex] = degree;
+  chordHistory[historyWriteIndex] = currentChord.name;
+  historyWriteIndex = (historyWriteIndex + 1) % CHORD_HISTORY_SIZE;
+  if (historyCount < CHORD_HISTORY_SIZE) historyCount++;
+}
+
+void stopSingleNote() {
+  stopCurrentChord();
+}
+
+bool isChordLatchMode() {
+  return chordLatchMode;
+}
+
+void setChordLatchMode(bool enabled) {
+  chordLatchMode = enabled;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
+  Serial.print("Chord latch mode: ");
+  Serial.println(chordLatchMode ? "ON" : "OFF");
+#endif
+}
+
+void toggleChordLatchMode() {
+  setChordLatchMode(!chordLatchMode);
+}
+
+bool isStrumMode() {
+  return strumMode;
+}
+
+void setStrumMode(bool enabled) {
+  strumMode = enabled;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
+  Serial.print("Strum mode: ");
+  Serial.println(strumMode ? "ON" : "OFF");
+#endif
+}
+
+void toggleStrumMode() {
+  setStrumMode(!strumMode);
 }
 
 bool isAutoVoicingMode() {
-  return autoVoicingMode;
+  return voicingMode == VOICING_SMART;
 }
 
 void setAutoVoicingMode(bool enabled) {
-  autoVoicingMode = enabled;
-  Serial.print("Auto-voicing mode: ");
-  Serial.println(autoVoicingMode ? "ON" : "OFF");
+  voicingMode = enabled ? VOICING_SMART : VOICING_CLASSIC;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
+  Serial.print("Smart voicing mode: ");
+  Serial.println(isAutoVoicingMode() ? "ON" : "OFF");
+#endif
 }
 
 void toggleAutoVoicingMode() {
-  autoVoicingMode = !autoVoicingMode;
-  Serial.print("Auto-voicing mode: ");
-  Serial.println(autoVoicingMode ? "ON" : "OFF");
+  voicingMode = (voicingMode == VOICING_SMART) ? VOICING_CLASSIC : VOICING_SMART;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
+  Serial.print("Smart voicing mode: ");
+  Serial.println(isAutoVoicingMode() ? "ON" : "OFF");
+#endif
+}
+
+VoicingMode getVoicingMode() {
+  return voicingMode;
+}
+
+void setVoicingMode(VoicingMode mode) {
+  voicingMode = mode;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
+  Serial.print("Voicing mode: ");
+  Serial.println(voicingMode == VOICING_SMART ? "Smart" : "Classic");
+#endif
 }
 
 int getOctaveOffset() {
@@ -526,8 +827,10 @@ void setOctaveOffset(int offset) {
   if (offset < -2) offset = -2;
   if (offset > 2) offset = 2;
   octaveOffset = offset;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
   Serial.print("Octave offset: ");
   Serial.println(octaveOffset);
+#endif
 }
 
 void incrementOctave() {

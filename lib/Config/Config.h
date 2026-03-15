@@ -83,10 +83,74 @@
 #define BASS_MODE_ENABLED_DEFAULT false
 #define BASS_OCTAVE_OFFSET -12 // One octave below chord root
 
+// Single note mode: when enabled, plays just the degree note instead of a chord
+#define SINGLE_NOTE_MODE_ENABLED_DEFAULT false
+
+// Chord latch mode: keep last played chord sounding after key release.
+#ifndef CHORD_LATCH_ENABLED_DEFAULT
+#define CHORD_LATCH_ENABLED_DEFAULT false
+#endif
+
+// Strum mode: stagger chord note-ons for guitar-like attack.
+#ifndef STRUM_MODE_ENABLED_DEFAULT
+#define STRUM_MODE_ENABLED_DEFAULT false
+#endif
+#ifndef STRUM_NOTE_DELAY_MS
+#define STRUM_NOTE_DELAY_MS 14
+#endif
+#if (STRUM_NOTE_DELAY_MS < 0) || (STRUM_NOTE_DELAY_MS > 100)
+#error "STRUM_NOTE_DELAY_MS must be between 0 and 100"
+#endif
+
 // Auto-voicing mode: automatically selects inversions to keep chords within octave
 #define AUTO_VOICING_ENABLED_DEFAULT false
 #define AUTO_VOICING_MIN_NOTE 60  // C4 - lowest note allowed
 #define AUTO_VOICING_MAX_NOTE 72  // C5 - highest note allowed (one octave range)
+
+// Smart voicing tuning (used when smart voicing mode is active).
+#ifndef SMART_VOICING_RANGE_MIN
+#define SMART_VOICING_RANGE_MIN AUTO_VOICING_MIN_NOTE
+#endif
+
+#ifndef SMART_VOICING_RANGE_MAX
+#define SMART_VOICING_RANGE_MAX AUTO_VOICING_MAX_NOTE
+#endif
+
+#ifndef SMART_VOICING_OCTAVE_MIN
+#define SMART_VOICING_OCTAVE_MIN -2
+#endif
+
+#ifndef SMART_VOICING_OCTAVE_MAX
+#define SMART_VOICING_OCTAVE_MAX 2
+#endif
+
+#ifndef SMART_WEIGHT_MOTION
+#define SMART_WEIGHT_MOTION 8
+#endif
+
+#ifndef SMART_WEIGHT_COMMON_TONE
+#define SMART_WEIGHT_COMMON_TONE 22
+#endif
+
+#ifndef SMART_WEIGHT_RANGE
+#define SMART_WEIGHT_RANGE 10
+#endif
+
+#ifndef SMART_WEIGHT_SPAN
+#define SMART_WEIGHT_SPAN 2
+#endif
+
+#ifndef SMART_TARGET_SPAN
+#define SMART_TARGET_SPAN 12
+#endif
+
+#if (SMART_VOICING_RANGE_MIN >= SMART_VOICING_RANGE_MAX)
+#error "SMART_VOICING_RANGE_MIN must be less than SMART_VOICING_RANGE_MAX"
+#endif
+
+#if (SMART_VOICING_OCTAVE_MIN > SMART_VOICING_OCTAVE_MAX)
+#error "SMART_VOICING_OCTAVE_MIN must be less than or equal to SMART_VOICING_OCTAVE_MAX"
+#endif
 
 // Time gating between successive joystick-driven chord variation changes.
 // Lower value makes the joystick feel more responsive.
@@ -112,8 +176,9 @@ extern const int MINOR_SCALE[];
 #define CHOCO_LOG_LEVEL_NONE 0
 #define CHOCO_LOG_LEVEL_INFO 1
 #define CHOCO_LOG_LEVEL_DEBUG 2
+#define CHOCO_LOG_LEVEL_VERBOSE 3
 #ifndef CHOCO_LOG_LEVEL
-#define CHOCO_LOG_LEVEL CHOCO_LOG_LEVEL_INFO
+#define CHOCO_LOG_LEVEL CHOCO_LOG_LEVEL_NONE
 #endif
 
 // Chord logs are enabled only when log level is INFO or higher.

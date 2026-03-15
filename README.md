@@ -7,8 +7,10 @@ It plays scale-aware chords from a 3x4 keypad, applies chord variations from an 
 
 - Class-compliant USB MIDI over TinyUSB
 - 3x4 keypad for chord degrees and functions
-- 8-way joystick chord variations (Maj7, Min7, Sus, 9, 11, Dim)
-- Per-degree inversion memory and optional auto-voicing
+- 8-way joystick chord variations with mode-based mappings
+- Per-degree inversion memory and optional smart voicing
+- Smart voicing mode for smoother full-voice motion
+- Chord latch mode and optional strummed chord attack
 - Optional bass pedal note and octave-shift controls
 - OLED status display with mode badges and recent chord-degree history
 
@@ -41,30 +43,65 @@ Actions:
 - `A`: increment root note (wraps chromatically)
 - `B`: cycle scale type (Ionian -> ... -> Melodic Minor -> Ionian)
 - `C` + `0..6`: cycle inversion for that degree
+- `C` + `A`: toggle chord latch mode
 - `C` + `B`: print chord history to serial
 
 Release behavior:
 
 - Active chord is stopped after a short release debounce (`~50 ms`)
+- If latch mode is on, chord stays active after key release
 
 ## Joystick Controls
 
-Chord variations (while chord is active):
+How it works:
 
-- Up: `Maj7`
-- Down: `Min7`
-- Left: `Sus2`
-- Right: `Sus4`
-- Up-right: `9`
-- Up-left: `11`
-- Down-right: `Min9`
-- Down-left: `Dim`
+- Hold a degree key (`0..6`) and move joystick to modify chord quality in real-time.
+- Return joystick to center to restore the base diatonic triad for that degree.
 
 Modifier behavior:
 
 - `C` + joystick left/right: octave offset down/up (range `-2..+2`)
+- `C` + joystick down: cycle joystick mode (`DEFAULT -> EXTENDED -> CHROMATIC`)
 - `C` + joystick button short press: toggle bass mode
-- `C` + joystick button long press: toggle auto-voicing mode
+- `C` + `A` + joystick button short press: toggle strum mode
+- `C` + joystick button long press: toggle smart voicing mode
+
+### Joystick Chord Map (DEFAULT mode)
+
+- Up: `Major <-> Minor` (depends on base quality)
+- Down: `sus4`
+- Left: `dim` (major base) / `minor` (minor or diminished base)
+- Right: `Maj7` (major base) / `min7` (minor or diminished base)
+- Up-left: `aug`
+- Up-right: `dom7`
+- Down-left: `Maj6` (major base) / `sus2` (minor or diminished base)
+- Down-right: `Maj9` (major base) / `min9` (minor or diminished base)
+
+### Joystick Chord Map (EXTENDED mode)
+
+- Up: `Major <-> Minor`
+- Down: `dom7#9`
+- Left: `sus4+7`
+- Right: `add11`
+- Up-left: `m7b5` (half-diminished 7)
+- Up-right: `dom9`
+- Down-left: `add9`
+- Down-right: `min11`
+
+### Joystick Chord Map (CHROMATIC mode)
+
+- Up: `min(maj7)`
+- Down: `Maj13`
+- Left: `m7b5`
+- Right: `6/9`
+- Up-left: `Maj7#11`
+- Up-right: `dom13`
+- Down-left: `dom7b9`
+- Down-right: `dom7alt`
+
+Chromatic bonus:
+
+- In `CHROMATIC` mode, with no chord key held, joystick left/right shifts key root by `-1/+1` semitone.
 
 ## Build and Upload (PlatformIO)
 
@@ -96,6 +133,15 @@ From VS Code:
   - `JOYSTICK_TRIGGER_ENGAGE_PCT`, `JOYSTICK_TRIGGER_RELEASE_PCT`
   - `JOYSTICK_BUTTON_ACTIVE_LOW`
   - `JOYSTICK_GRACE_PERIOD`
+- Smart voicing:
+  - `SMART_VOICING_RANGE_MIN`, `SMART_VOICING_RANGE_MAX`
+  - `SMART_VOICING_OCTAVE_MIN`, `SMART_VOICING_OCTAVE_MAX`
+  - `SMART_WEIGHT_MOTION`, `SMART_WEIGHT_COMMON_TONE`
+  - `SMART_WEIGHT_RANGE`, `SMART_WEIGHT_SPAN`, `SMART_TARGET_SPAN`
+- Latch/strum:
+  - `CHORD_LATCH_ENABLED_DEFAULT`
+  - `STRUM_MODE_ENABLED_DEFAULT`
+  - `STRUM_NOTE_DELAY_MS`
 - Timing:
   - `SPLASH_SCREEN_DURATION`
   - `STATUS_MESSAGE_DURATION`
@@ -137,6 +183,18 @@ Recommended presets:
   - `JOYSTICK_TRIGGER_ENGAGE_PCT=65`
   - `JOYSTICK_TRIGGER_RELEASE_PCT=50`
 
+## Smart Voicing
+
+When smart voicing mode is enabled, chord content stays fixed, but inversion/register
+are selected to reduce total voice movement and keep common tones when possible.
+
+Scoring priorities:
+
+- lower total movement between previous and next voiced notes
+- reward shared/common tones
+- soft penalties for notes outside preferred range
+- mild span shaping around `SMART_TARGET_SPAN`
+
 ## Troubleshooting
 
 - MIDI device not visible:
@@ -165,3 +223,11 @@ Run before release:
 5. Hold `C` and short/long press joystick button, confirm bass and auto-voicing toggles.
 6. Leave idle until screensaver starts, then wake by key or joystick movement.
 7. Confirm OLED top-line state badges reflect edit/bass/auto-voicing modes.
+
+## Contributing
+
+See `CONTRIBUTING.md` for setup, tests, and PR expectations.
+
+## License
+
+Licensed under the PolyForm Noncommercial License 1.0.0. See `LICENSE`.
