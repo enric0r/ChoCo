@@ -2,6 +2,8 @@
 
 ChoCo is a compact USB MIDI chord controller for RP2040 boards. It combines a 3x4 keypad, an analog joystick, and a 128x64 OLED to play scale-aware chords, apply live variations, and show the current state directly on the device.
 
+**Website:** [ChoCo](https://enric0r.github.io/choco.github.io/) · **Guides:** [English](https://enric0r.github.io/choco.github.io/docs/) · [Italiano](https://enric0r.github.io/choco.github.io/it/docs/)
+
 <p align="center">
   <img src="hardware/front.jpg" alt="ChoCo front view" width="48%">
   <img src="hardware/back.jpg" alt="ChoCo back view" width="48%">
@@ -39,12 +41,12 @@ Hardware design files live in `hardware/`:
 
 ### Keypad
 
-Physical layout:
+Physical layout of the prototype (the upper rows sit between the white keys):
 
 ```text
-A  B  C  _
-1  3  5  _
-0  2  4  6
+  A   B   C
+  1   3   5
+0   2   4   6
 ```
 
 - `0..6`: play the selected scale degree
