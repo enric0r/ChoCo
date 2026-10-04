@@ -126,6 +126,9 @@ Active modes appear as a compact text line: `VOI` (smart voicing), `BAS` (bass),
 `NEXT` suggestions. Temporary confirmations replace only the footer so the
 chord stays readable. Long text is fitted or explicitly truncated.
 
+Startup uses a static CHOCO wordmark. The screensaver moves the same wordmark
+with the selected key/scale on a separate line; it does not blink or invert.
+
 ### Responsiveness and feedback
 
 - Each key and the joystick button use a 10 ms stable-edge debounce, including releases. A newly pressed degree takes over from a held degree; releasing it stops playback unless latch is enabled. Previously held degrees do not retrigger automatically. Exactly simultaneous presses select the lowest degree.

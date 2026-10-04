@@ -8,9 +8,9 @@
 
 namespace {
 
-static const uint8_t PROGMEM kChoCoMark[] = {
-  0x66, 0xFF, 0xDB, 0xDB, 0xFF, 0x66, 0x24, 0x00
-};
+// Both screensaver lines fit inside this moving block, including C# HMIN.
+static constexpr int16_t kSaverWidth = 72;
+static constexpr int16_t kSaverHeight = 36;
 
 static char g_statusBody[STATUS_TEXT_CAPACITY] = {};
 static bool displayReady = false;
@@ -102,10 +102,6 @@ void drawCenteredText(const char* text, int16_t x, int16_t y, int16_t w, int16_t
   }
   display.setCursor(cursorX, cursorY);
   display.print(text);
-}
-
-void drawPanel(int16_t x, int16_t y, int16_t w, int16_t h) {
-  display.drawRoundRect(x, y, w, h, 3, SSD1306_WHITE);
 }
 
 void drawDirectionGlyph(int16_t x, int16_t y, JoystickDirection direction) {
@@ -242,52 +238,19 @@ void drawFooter(const UiSnapshot& snapshot) {
   }
 }
 
-void drawSplashFrame(int frame) {
+void drawSplashFrame() {
   display.clearDisplay();
-  drawPanel(10, 14, 108, 34);
-
-  if ((frame % 2) == 0) {
-    display.fillRoundRect(18, 24, 14, 14, 3, SSD1306_WHITE);
-    display.drawBitmap(21, 27, kChoCoMark, 8, 8, SSD1306_BLACK);
-  } else {
-    display.drawRoundRect(18, 24, 14, 14, 3, SSD1306_WHITE);
-    display.drawBitmap(21, 27, kChoCoMark, 8, 8, SSD1306_WHITE);
-  }
-
-  display.setTextSize(2);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(40, 24);
-  display.print("CHOCO");
-
-  for (int i = 0; i < 4; ++i) {
-    const int16_t x = 38 + (i * 18);
-    if (i == (frame % 4)) {
-      display.fillRoundRect(x, 52, 12, 6, 2, SSD1306_WHITE);
-    } else {
-      display.drawRoundRect(x, 52, 12, 6, 2, SSD1306_WHITE);
-    }
-  }
+  drawCenteredText("CHOCO", 0, 16, SCREEN_WIDTH, 24, 3, SSD1306_WHITE);
+  drawCenteredText("USB MIDI", 0, 46, SCREEN_WIDTH, 8, 1, SSD1306_WHITE);
 }
 
-void drawScreensaverFrame(int16_t x, int16_t y, int frame) {
+void drawScreensaverFrame(int16_t x, int16_t y) {
   display.clearDisplay();
-  display.drawRoundRect(x, y, 46, 18, 3, SSD1306_WHITE);
-
-  if ((frame % 2) == 0) {
-    display.fillRoundRect(x + 4, y + 4, 10, 10, 2, SSD1306_WHITE);
-    display.drawBitmap(x + 5, y + 5, kChoCoMark, 8, 8, SSD1306_BLACK);
-  } else {
-    display.drawBitmap(x + 5, y + 5, kChoCoMark, 8, 8, SSD1306_WHITE);
-  }
-
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(x + 18, y + 4);
-  display.print("CHOCO");
-  display.setCursor(x + 18, y + 11);
-  display.print(getNoteName(getCurrentRootNote()));
-  display.print(" ");
-  display.print(getScaleAbbreviation(getCurrentScaleName()));
+  drawCenteredText("CHOCO", x, y, kSaverWidth, 16, 2, SSD1306_WHITE);
+  char context[16];
+  snprintf(context, sizeof(context), "%s %s", getNoteName(getCurrentRootNote()),
+           getScaleAbbreviation(getCurrentScaleName()));
+  drawCenteredText(context, x, y + 24, kSaverWidth, 8, 1, SSD1306_WHITE);
 }
 
 } // namespace
@@ -347,35 +310,33 @@ void updateScreensaver() {
   static int16_t y = 16;
   static int16_t dx = 2;
   static int16_t dy = 1;
-  static int frame = 0;
 
   if (!screensaverActive && (millis() - lastActivityTime > SCREENSAVER_TIMEOUT_MS)) {
     screensaverActive = true;
-    display.clearDisplay();
-    presentFrame();
+    lastAnimationUpdate = millis() - SCREENSAVER_ANIMATION_INTERVAL_MS;
   }
 
   if (!screensaverActive) {
     return;
   }
 
-  if (millis() - lastAnimationUpdate <= SCREENSAVER_ANIMATION_INTERVAL_MS) {
+  if (millis() - lastAnimationUpdate < SCREENSAVER_ANIMATION_INTERVAL_MS) {
     return;
   }
 
   lastAnimationUpdate = millis();
   x += dx;
   y += dy;
-  if (x <= 0 || x >= SCREEN_WIDTH - 46) {
+  if (x <= 0 || x >= SCREEN_WIDTH - kSaverWidth) {
     dx = -dx;
     x += dx;
   }
-  if (y <= 0 || y >= SCREEN_HEIGHT - 18) {
+  if (y <= 0 || y >= SCREEN_HEIGHT - kSaverHeight) {
     dy = -dy;
     y += dy;
   }
 
-  drawScreensaverFrame(x, y, frame++);
+  drawScreensaverFrame(x, y);
   presentFrame();
 }
 
@@ -385,11 +346,9 @@ void drawSplashScreen() {
   Serial.println("Drawing splash screen...");
 #endif
   unsigned long start = millis();
-  int frame = 0;
-
+  drawSplashFrame();
+  presentFrame();
   while (millis() - start < SPLASH_SCREEN_DURATION) {
-    drawSplashFrame(frame++);
-    presentFrame();
     delay(160);
   }
 
