@@ -34,24 +34,20 @@ void setup() {
 
 void loop() {
     static char activeKey = NO_KEY;        // last key whose chord we started
-    static unsigned long releaseStart = 0; // when we first saw no-key
+    static bool latchGesturePending = false;
     static int lastXValue = JOYSTICK_CENTER_X;
     static int lastYValue = JOYSTICK_CENTER_Y;
-
-    updateScreensaver();
 
     ControlSnapshot controls = {};
     pollControls(controls);
     setEditModeIndicator(controls.modifierCHeld);
+    setInteractionState(controls.rawKey, controls.joyDirection, controls.modifierCHeld, controls.joyBtnHeld);
 
-    // Skip normal processing if screensaver is active
-    if (isScreensaverActive()) {
-        const bool axisMoved = (controls.joyDirectionInstant != JoystickDirection::Center);
-        if (controls.rawKey != NO_KEY || axisMoved || controls.joyBtnHeld) {
-            resetScreensaverTimer();
-        }
-        delay(10);
-        return;
+    // Wake and process the same input; held controls and sounding chords keep
+    // the status visible even after the inactivity timeout.
+    if (controls.rawKey != NO_KEY || controls.joyBtnHeld ||
+        controls.joyDirection != JoystickDirection::Center || isChordActive()) {
+        resetScreensaverTimer();
     }
 
     const bool cButtonHeld = controls.modifierCHeld;
@@ -65,68 +61,74 @@ void loop() {
             const int degree = key - '0';
             cycleInversionForDegree(degree);
             const int inv = getInversionForDegree(degree);
-            showStatus(String("Deg ") + degree + " Inv: " + inv, 800);
+            char message[STATUS_TEXT_CAPACITY];
+            snprintf(message, sizeof(message), "Deg %d Inv: %d", degree + 1, inv);
+            showStatus(message, 800);
         } else if (cButtonHeld && key == 'A') {
-            toggleChordLatchMode();
-            showStatus(String("Latch: ") + (isChordLatchMode() ? "ON" : "OFF"), 800);
-            if (!isChordLatchMode() && controls.rawKey == NO_KEY) {
-                stopCurrentChord();
-                activeKey = NO_KEY;
-                releaseStart = 0;
-            }
+            // Resolve on A release so C+A+button only changes strum.
+            latchGesturePending = !controls.joyBtnHeld;
         } else if (!cButtonHeld && key >= '0' && key <= '6') {
             const int* varIntervals = nullptr;
             int varSize = 0;
             const char* varName = nullptr;
-            const JoystickDirection direction = controls.joyDirectionInstant;
+            const JoystickDirection direction = controls.joyDirection;
             const int degree = key - '0';
             const bool hasVariation = getChordVariationForDirection(direction, degree, varIntervals, varSize, varName);
 
+            primeJoystickDirection(direction);
             if (hasVariation) {
-                primeJoystickDirection(direction);
                 playChordForDegreeWithIntervals(degree, varIntervals, varSize, varName);
             } else {
                 handleKeyPress(key);
             }
             activeKey = key;
-            releaseStart = 0;
         } else if (cButtonHeld && key == 'B') {
             printChordHistory();
-            showStatus("History", 600);
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
+            showStatus("History sent", 600);
+#else
+            showStatus("Serial log OFF", 600);
+#endif
         } else if (!cButtonHeld && (key == 'A' || key == 'B')) {
             handleKeyPress(key);
         }
     }
 
     // Reset screensaver on joystick movement (with deadzone)
-    if (abs(controls.joyX - lastXValue) > 50 || abs(controls.joyY - lastYValue) > 50) {
+    if (abs(controls.joyX - lastXValue) > JOYSTICK_ACTIVITY_DELTA || abs(controls.joyY - lastYValue) > JOYSTICK_ACTIVITY_DELTA) {
         resetScreensaverTimer();
         lastXValue = controls.joyX;
         lastYValue = controls.joyY;
     }
 
-    handleJoystick(controls.joyX, controls.joyY, cButtonHeld, controls.joyBtnHeld, controls.rawKey);
-
-    // Stop chord when key is released (debounced)
-    if (activeKey != NO_KEY) {
-        if (controls.rawKey == NO_KEY) {
-            if (isChordLatchMode()) {
-                activeKey = NO_KEY;
-                releaseStart = 0;
-            } else if (releaseStart == 0) {
-                releaseStart = millis();
-            } else if (millis() - releaseStart > 50) {
-                stopCurrentChord();
-                activeKey = NO_KEY;
-                releaseStart = 0;
-            }
-        } else {
-            releaseStart = 0;
+    if (controls.joyBtnHeld) latchGesturePending = false;
+    if (latchGesturePending && !(controls.heldKeys & (1u << 7))) {
+        latchGesturePending = false;
+        toggleChordLatchMode();
+        showStatusValue("Latch", isChordLatchMode() ? "ON" : "OFF", 800);
+        if (!isChordLatchMode() && (activeKey == NO_KEY ||
+            !(controls.heldKeys & (1u << (activeKey - '0'))))) {
+            stopCurrentChord();
+            activeKey = NO_KEY;
         }
     }
+    // Release the actual sounding degree, even when A/B/C or another degree
+    // remains held. The input layer already debounced this edge.
+    if (activeKey != NO_KEY && !(controls.heldKeys & (1u << (activeKey - '0')))) {
+        if (!isChordLatchMode()) stopCurrentChord();
+        activeKey = NO_KEY;
+    }
+    const char gestureKey = (controls.heldKeys & (1u << 7)) ? 'A' : controls.rawKey;
+    handleJoystick(controls.joyDirection, cButtonHeld, controls.joyBtnHeld, gestureKey);
+
+    updateChordPlayback();
+    // Full OLED transfers occupy the bus for milliseconds; defer them until
+    // a strum has finished so note spacing and input scans stay responsive.
+    if (isChordPlaybackPending()) return;
+    updateScreensaver();
 
     static unsigned long lastUi = 0;
-    if (millis() - lastUi >= 100) {
+    if (millis() - lastUi >= UI_REFRESH_MS) {
         updateDisplay();
         lastUi = millis();
     }

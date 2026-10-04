@@ -53,11 +53,7 @@ jobs:
           pip install platformio
 
       - name: Run fast logic tests
-        run: |
-          g++ -std=c++17 -Wall -Wextra -pedantic -Ilib/ChordEngine test/logic/test_chord_logic.cpp -o /tmp/choco_logic_tests
-          /tmp/choco_logic_tests
-          g++ -std=c++17 -Wall -Wextra -pedantic -Ilib/Controls test/logic/test_joystick_direction.cpp -o /tmp/choco_joystick_tests
-          /tmp/choco_joystick_tests
+        run: bash test/run_host_tests.sh
 
       - name: Build firmware
         run: pio run

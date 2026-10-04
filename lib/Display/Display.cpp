@@ -1,35 +1,259 @@
 #include "Display.h"
 #include "ChordEngine.h"
 #include "Config.h"
+#include "DisplayDirection.h"
 #include <Wire.h>
+#include <stdio.h>
 #include <string.h>
 
-static const unsigned char PROGMEM logo_1[] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0xff,0xff,0xf8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0xff,0xbf,0xe8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0xff,0xbf,0xe8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0xff,0xbf,0xe8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x00,0x00,0x00,0x00,0x7f,0xc0,0x00,0x00,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x00,0x00,0x00,0x00,0x7f,0xc0,0x00,0x00,0x02,0xff,0xbf,0xe8,0x1f,0xf0,0x38,0x00,0x00,0x00,0x00,0x7f,0xc0,0x00,0x00,0x02,0x00,0x00,0x08,0xe0,0x0e,0x38,0x00,0x00,0x00,0x03,0x80,0x38,0x00,0x00,0x02,0x00,0x00,0x08,0xe0,0x0e,0x38,0x00,0x00,0x00,0x03,0x80,0x38,0x00,0x00,0x02,0xff,0xbf,0xe8,0xe0,0x0e,0x38,0x00,0x00,0x00,0x03,0x80,0x38,0x00,0x00,0x02,0x80,0xa0,0x28,0xe0,0x00,0x38,0xfc,0x01,0xff,0x03,0x80,0x00,0x1f,0xf0,0x02,0x80,0xa0,0x28,0xe0,0x00,0x38,0xfc,0x01,0xff,0x03,0x80,0x00,0x1f,0xf0,0x02,0x80,0xa0,0x28,0xe0,0x00,0x38,0xfc,0x01,0xff,0x03,0x80,0x00,0x1f,0xf0,0x02,0x80,0xa0,0x28,0xe0,0x00,0x3f,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0x80,0xa0,0x28,0xe0,0x00,0x3f,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0x80,0xa0,0x28,0xe0,0x00,0x3f,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0xff,0xbf,0xe8,0xe0,0x00,0x38,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0x00,0x00,0x08,0xe0,0x00,0x38,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0x00,0x00,0x08,0xe0,0x00,0x38,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0xff,0xbf,0xe8,0xe0,0x0e,0x38,0x03,0x8e,0x00,0xe3,0x80,0x38,0xe0,0x0e,0x02,0x80,0xa0,0x28,0xe0,0x0e,0x38,0x03,0x8e,0x00,0xe3,0x80,0x38,0xe0,0x0e,0x02,0x80,0xa0,0x28,0xe0,0x0e,0x38,0x03,0x8e,0x00,0xe3,0x80,0x38,0xe0,0x0e,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x03,0x81,0xff,0x00,0x7f,0xc0,0x1f,0xf0,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x03,0x81,0xff,0x00,0x7f,0xc0,0x1f,0xf0,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x03,0x81,0xff,0x00,0x7f,0xc0,0x1f,0xf0,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0xff,0xbf,0xe8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0xff,0xff,0xf8};
-static const unsigned char PROGMEM logo_2[] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xff,0xf8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xbf,0xe8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x06,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x10,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x60,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xff,0xbf,0xe8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0xff,0xbf,0xe8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x00,0x00,0x00,0x00,0x7f,0xc0,0x00,0x00,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x00,0x00,0x00,0x00,0x7f,0xc0,0x00,0x00,0x02,0xff,0xbf,0xe8,0x1f,0xf0,0x38,0x00,0x00,0x00,0x00,0x7f,0xc0,0x00,0x00,0x02,0x00,0x00,0x08,0xe0,0x0e,0x38,0x00,0x00,0x00,0x03,0x80,0x38,0x00,0x00,0x02,0x00,0x00,0x08,0xe0,0x0e,0x38,0x00,0x00,0x00,0x03,0x80,0x38,0x00,0x00,0x02,0xff,0xbf,0xe8,0xe0,0x0e,0x38,0x00,0x00,0x00,0x03,0x80,0x38,0x00,0x00,0x02,0x80,0xa0,0x28,0xe0,0x00,0x38,0xfc,0x01,0xff,0x03,0x80,0x00,0x1f,0xf0,0x02,0x80,0xa0,0x28,0xe0,0x00,0x38,0xfc,0x01,0xff,0x03,0x80,0x00,0x1f,0xf0,0x02,0x80,0xa0,0x28,0xe0,0x00,0x38,0xfc,0x01,0xff,0x03,0x80,0x00,0x1f,0xf0,0x02,0x80,0xa0,0x28,0xe0,0x00,0x3f,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0x80,0xa0,0x28,0xe0,0x00,0x3f,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0x80,0xa0,0x28,0xe0,0x00,0x3f,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0xff,0xbf,0xe8,0xe0,0x00,0x38,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0x00,0x00,0x08,0xe0,0x00,0x38,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0x00,0x00,0x08,0xe0,0x00,0x38,0x03,0x8e,0x00,0xe3,0x80,0x00,0xe0,0x0e,0x02,0xff,0xbf,0xe8,0xe0,0x0e,0x38,0x03,0x8e,0x00,0xe3,0x80,0x38,0xe0,0x0e,0x02,0x80,0xa0,0x28,0xe0,0x0e,0x38,0x03,0x8e,0x00,0xe3,0x80,0x38,0xe0,0x0e,0x02,0x80,0xa0,0x28,0xe0,0x0e,0x38,0x03,0x8e,0x00,0xe3,0x80,0x38,0xe0,0x0e,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x03,0x81,0xff,0x00,0x7f,0xc0,0x1f,0xf0,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x03,0x81,0xff,0x00,0x7f,0xc0,0x1f,0xf0,0x02,0x80,0xa0,0x28,0x1f,0xf0,0x38,0x03,0x81,0xff,0x00,0x7f,0xc0,0x1f,0xf0,0x02,0x80,0xa0,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0xff,0xbf,0xe8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0xff,0xff,0xf8};
+namespace {
 
-static String g_statusMessage;
-static unsigned long g_statusUntil = 0;
+// Both screensaver lines fit inside this moving block, including C# HMIN.
+static constexpr int16_t kSaverWidth = 72;
+static constexpr int16_t kSaverHeight = 36;
+
+static char g_statusBody[STATUS_TEXT_CAPACITY] = {};
+static bool displayReady = false;
+static char g_statusLabel[8] = "INFO";
+static uint32_t g_statusStart = 0;
+static uint32_t g_statusDuration = 0;
 static bool g_editModeIndicator = false;
 
-// Screensaver state
+struct InteractionState {
+  char rawKey = '\0';
+  JoystickDirection joyDirection = JoystickDirection::Center;
+  bool modifierCHeld = false;
+  bool joyBtnHeld = false;
+};
+
+struct UiSnapshot {
+  const char* chordName;
+  const char* rootName;
+  const char* scaleAbbr;
+  bool autoVoicing;
+  bool bassMode;
+  bool singleNoteMode;
+  bool strumMode;
+  bool latchMode;
+  bool editMode;
+  bool hasStatusOverlay;
+  int activeDegree;
+  int suggestionCount;
+  int suggestionDegrees[4];
+  JoystickDirection joyDirection;
+  bool joyDirectionActive;
+};
+
+static InteractionState g_interactionState;
 static unsigned long lastActivityTime = 0;
 static bool screensaverActive = false;
-static int screensaverFrame = 0;
 
-// Simple I2C scanner to help debug display issues on the selected TwoWire bus
-static void scanI2C(TwoWire &tw) {
+void presentFrame() {
+  static uint8_t previous[SCREEN_WIDTH * SCREEN_HEIGHT / 8] = {};
+  static bool valid = false;
+  const uint8_t* frame = display.getBuffer();
+  if (!valid || memcmp(previous, frame, sizeof(previous)) != 0) {
+    display.display();
+    memcpy(previous, frame, sizeof(previous));
+    valid = true;
+  }
+}
+
+void scanI2C(TwoWire& tw) {
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
   Serial.println(F("\nScanning I2C bus for devices..."));
-  for(uint8_t addr = 1; addr < 127; addr++) {
+  for (uint8_t addr = 1; addr < 127; addr++) {
     tw.beginTransmission(addr);
     uint8_t error = tw.endTransmission();
-    if(error == 0) {
+    if (error == 0) {
       Serial.print(F("I2C device found at address 0x"));
-      if(addr < 16) Serial.print("0");
+      if (addr < 16) {
+        Serial.print("0");
+      }
       Serial.println(addr, HEX);
     }
   }
   Serial.println(F("Scan complete.\n"));
+#else
+  (void)tw;
+#endif
 }
+
+void copyText(char* dest, size_t size, const char* src) {
+  if (size == 0) {
+    return;
+  }
+  strncpy(dest, src, size - 1);
+  dest[size - 1] = '\0';
+}
+
+void drawCenteredText(const char* text, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t size, uint16_t color, uint16_t bg = SSD1306_BLACK) {
+  display.setTextSize(size);
+  display.setTextColor(color, bg);
+  int16_t x1;
+  int16_t y1;
+  uint16_t textW;
+  uint16_t textH;
+  display.getTextBounds(text, 0, 0, &x1, &y1, &textW, &textH);
+  int16_t cursorX = x + ((w - (int16_t)textW) / 2);
+  int16_t cursorY = y + ((h - (int16_t)textH) / 2) - y1;
+  if (cursorX < x + 1) {
+    cursorX = x + 1;
+  }
+  display.setCursor(cursorX, cursorY);
+  display.print(text);
+}
+
+void drawDirectionGlyph(int16_t x, int16_t y, JoystickDirection direction) {
+  // Preserve the mounted device's vertical orientation; horizontal is not mirrored.
+  const DirectionVector vector = displayDirectionVector(direction);
+  const int16_t dx = vector.x * 4, dy = vector.y * 4;
+  if (dx == 0 && dy == 0) return;
+  const int16_t cx = x + 5, cy = y + 5;
+  display.drawLine(cx - dx, cy - dy, cx + dx, cy + dy, SSD1306_WHITE);
+  const int16_t tipX = cx + dx, tipY = cy + dy;
+  display.drawLine(tipX, tipY, tipX - vector.x * 3 + vector.y * 2,
+                   tipY - vector.y * 3 - vector.x * 2, SSD1306_WHITE);
+  display.drawLine(tipX, tipY, tipX - vector.x * 3 - vector.y * 2,
+                   tipY - vector.y * 3 + vector.x * 2, SSD1306_WHITE);
+}
+
+// Fixed-width built-in font: fit text into the reserved line with explicit truncation.
+void drawTextLine(const char* text, int16_t x, int16_t y, int16_t width) {
+  char fitted[CHORD_NAME_CAPACITY];
+  const size_t capacity = min(sizeof(fitted) - 1, size_t(width / 6));
+  copyText(fitted, capacity + 1, text);
+  if (strlen(text) > capacity && capacity >= 3) {
+    memcpy(fitted + capacity - 3, "...", 3);
+  }
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(x, y);
+  display.print(fitted);
+}
+
+bool statusVisible() {
+  return g_statusBody[0] && uint32_t(millis() - g_statusStart) < g_statusDuration;
+}
+
+void parseStatusMessage(const char* message) {
+  struct Prefix { const char* text; const char* label; };
+  static const Prefix prefixes[] = {
+    {"Root: ", "ROOT"}, {"Scale: ", "SCALE"}, {"Latch: ", "LATCH"},
+    {"Bass: ", "BASS"}, {"Strum: ", "STRM"}, {"SmartVoice: ", "VOICE"},
+    {"Note: ", "NOTE"}, {"Octave: ", "OCT"}, {"Joy: ", "JOY"}
+  };
+  copyText(g_statusLabel, sizeof(g_statusLabel), "INFO");
+  for (const auto& prefix : prefixes) {
+    const size_t length = strlen(prefix.text);
+    if (strncmp(message, prefix.text, length) == 0) {
+      copyText(g_statusLabel, sizeof(g_statusLabel), prefix.label);
+      message += length;
+      break;
+    }
+  }
+  if (strncmp(message, "Deg ", 4) == 0) copyText(g_statusLabel, sizeof(g_statusLabel), "INV");
+  copyText(g_statusBody, sizeof(g_statusBody), message);
+}
+
+UiSnapshot buildSnapshot() {
+  UiSnapshot snapshot = {};
+  snapshot.chordName = getCurrentChordName();
+  snapshot.rootName = getNoteName(getCurrentRootNote());
+  snapshot.scaleAbbr = getScaleAbbreviation(getCurrentScaleName());
+  snapshot.autoVoicing = isAutoVoicingMode();
+  snapshot.bassMode = isBassMode();
+  snapshot.singleNoteMode = isSingleNoteMode();
+  snapshot.strumMode = isStrumMode();
+  snapshot.latchMode = isChordLatchMode();
+  snapshot.editMode = g_editModeIndicator;
+  snapshot.hasStatusOverlay = statusVisible();
+  snapshot.activeDegree = getActiveChordDegree();
+  snapshot.suggestionCount = min(4, getChordSuggestionCount());
+  snapshot.joyDirection = g_interactionState.joyDirection;
+  snapshot.joyDirectionActive = (snapshot.joyDirection != JoystickDirection::Center);
+
+  for (int i = 0; i < snapshot.suggestionCount; ++i) {
+    snapshot.suggestionDegrees[i] = getChordSuggestionDegree(i);
+  }
+
+  return snapshot;
+}
+
+void drawTopBar(const UiSnapshot& snapshot) {
+  char keyLabel[16];
+  snprintf(keyLabel, sizeof(keyLabel), "%s %s", snapshot.rootName, snapshot.scaleAbbr);
+  drawTextLine(keyLabel, 3, 2, 72);
+  if (snapshot.editMode) {
+    drawTextLine("EDIT", 80, 2, 24);
+  } else if (isValidDegree(snapshot.activeDegree)) {
+    char degree[3] = {'D', static_cast<char>('1' + snapshot.activeDegree), '\0'};
+    drawTextLine(degree, 92, 2, 12);
+  }
+  if (snapshot.joyDirectionActive) drawDirectionGlyph(114, 0, snapshot.joyDirection);
+}
+
+void drawHeroChord(const UiSnapshot& snapshot) {
+  const char* label = snapshot.chordName[0] ? snapshot.chordName : "READY";
+  const uint8_t size = strlen(label) <= 10 ? 2 : 1;
+  if (strlen(label) > 20) {
+    drawTextLine(label, 4, 23, 120);
+  } else {
+    drawCenteredText(label, 2, 16, 124, 22, size, SSD1306_WHITE);
+  }
+}
+
+void drawActiveModes(const UiSnapshot& snapshot) {
+  char modes[24] = {};
+  // Short text labels are easier to recognize than six competing filled icons.
+  if (snapshot.autoVoicing) strcat(modes, "VOI ");
+  if (snapshot.bassMode) strcat(modes, "BAS ");
+  if (snapshot.singleNoteMode) strcat(modes, "NOTE ");
+  if (snapshot.strumMode) strcat(modes, "STR ");
+  if (snapshot.latchMode) strcat(modes, "LAT ");
+  const size_t length = strlen(modes);
+  if (length) {
+    modes[length - 1] = '\0';
+    drawCenteredText(modes, 2, 41, 124, 8, 1, SSD1306_WHITE);
+  }
+}
+
+void drawFooter(const UiSnapshot& snapshot) {
+  display.drawFastHLine(3, 52, 122, SSD1306_WHITE);
+  if (snapshot.hasStatusOverlay) {
+    char message[STATUS_TEXT_CAPACITY + 8];
+    if (strcmp(g_statusLabel, "INFO") == 0 || strcmp(g_statusLabel, "INV") == 0)
+      snprintf(message, sizeof(message), "%s", g_statusBody);
+    else
+      snprintf(message, sizeof(message), "%s %s", g_statusLabel, g_statusBody);
+    drawTextLine(message, 3, 56, 122);
+    return;
+  }
+  drawTextLine("NEXT", 3, 56, 24);
+  for (int i = 0; i < snapshot.suggestionCount; ++i) {
+    const int degree = snapshot.suggestionDegrees[i];
+    if (!isValidDegree(degree)) continue;
+    char label[2] = {static_cast<char>('1' + degree), '\0'};
+    drawTextLine(label, 43 + i * 22, 56, 6);
+  }
+}
+
+void drawSplashFrame() {
+  display.clearDisplay();
+  drawCenteredText("CHOCO", 0, 16, SCREEN_WIDTH, 24, 3, SSD1306_WHITE);
+  drawCenteredText("USB MIDI", 0, 46, SCREEN_WIDTH, 8, 1, SSD1306_WHITE);
+}
+
+void drawScreensaverFrame(int16_t x, int16_t y) {
+  display.clearDisplay();
+  drawCenteredText("CHOCO", x, y, kSaverWidth, 16, 2, SSD1306_WHITE);
+  char context[16];
+  snprintf(context, sizeof(context), "%s %s", getNoteName(getCurrentRootNote()),
+           getScaleAbbreviation(getCurrentScaleName()));
+  drawCenteredText(context, x, y + 24, kSaverWidth, 8, 1, SSD1306_WHITE);
+}
+
+} // namespace
 
 #if I2C_PORT == 0
 #define CHOCO_I2C_BUS Wire
@@ -40,27 +264,30 @@ static void scanI2C(TwoWire &tw) {
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &CHOCO_I2C_BUS, OLED_RESET);
 
 void setupDisplay() {
-  TwoWire &tw = CHOCO_I2C_BUS;
+  TwoWire& tw = CHOCO_I2C_BUS;
 
-  // Initialize I2C with the correct pins for RP2040
   tw.setSDA(I2C_SDA_PIN);
   tw.setSCL(I2C_SCL_PIN);
   tw.begin();
-  tw.setClock(400000); // 400kHz
-  
-  // Scan I2C bus to see if display is detected
+  tw.setClock(400000);
+
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
   scanI2C(tw);
-  
+
   Serial.print(F("Initializing display at address 0x"));
   Serial.println(SCREEN_ADDRESS, HEX);
+#endif
 
-  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
     Serial.println(F("SSD1306 allocation failed"));
-    for(;;);
+#endif
+    return;
   }
+
+  displayReady = true;
   display.clearDisplay();
-  
-  // Initialize screensaver timer
+  display.setTextWrap(false);
   resetScreensaverTimer();
 }
 
@@ -68,9 +295,7 @@ void resetScreensaverTimer() {
   lastActivityTime = millis();
   if (screensaverActive) {
     screensaverActive = false;
-    screensaverFrame = 0;
-    // Force immediate display update when exiting screensaver
-    display.clearDisplay();
+    if (displayReady) display.clearDisplay();
   }
 }
 
@@ -79,261 +304,142 @@ bool isScreensaverActive() {
 }
 
 void updateScreensaver() {
+  if (!displayReady) return;
   static unsigned long lastAnimationUpdate = 0;
-  
-  // Check if we should activate screensaver
+  static int16_t x = 0;
+  static int16_t y = 16;
+  static int16_t dx = 2;
+  static int16_t dy = 1;
+
   if (!screensaverActive && (millis() - lastActivityTime > SCREENSAVER_TIMEOUT_MS)) {
     screensaverActive = true;
-    screensaverFrame = 0;
-    display.clearDisplay();
-    display.display();
+    lastAnimationUpdate = millis() - SCREENSAVER_ANIMATION_INTERVAL_MS;
   }
-  
-  // If screensaver is not active, nothing to do
-  if (!screensaverActive) return;
-  
-  // Update screensaver animation
-  if (millis() - lastAnimationUpdate > SCREENSAVER_ANIMATION_INTERVAL_MS) {
-    lastAnimationUpdate = millis();
-    
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
-    
-    // Simple bouncing text animation
-    static int x = 0;
-    static int y = 0;
-    static int dx = 2;
-    static int dy = 1;
-    
-    // Draw the logo (using only logo_1)
-    display.drawBitmap(x, y, logo_1, 117, 42, SSD1306_WHITE);
-    
-    // Update position for bouncing effect
+
+  if (!screensaverActive) {
+    return;
+  }
+
+  if (millis() - lastAnimationUpdate < SCREENSAVER_ANIMATION_INTERVAL_MS) {
+    return;
+  }
+
+  lastAnimationUpdate = millis();
+  x += dx;
+  y += dy;
+  if (x <= 0 || x >= SCREEN_WIDTH - kSaverWidth) {
+    dx = -dx;
     x += dx;
-    y += dy;
-    
-    // Bounce off edges
-    if (x <= 0 || x >= SCREEN_WIDTH - 117) {
-      dx = -dx;
-    }
-    if (y <= 0 || y >= SCREEN_HEIGHT - 42) {
-      dy = -dy;
-    }
-    
-    display.display();
-    screensaverFrame++;
   }
+  if (y <= 0 || y >= SCREEN_HEIGHT - kSaverHeight) {
+    dy = -dy;
+    y += dy;
+  }
+
+  drawScreensaverFrame(x, y);
+  presentFrame();
 }
 
 void drawSplashScreen() {
+  if (!displayReady) return;
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
   Serial.println("Drawing splash screen...");
+#endif
   unsigned long start = millis();
-  unsigned long duration = SPLASH_SCREEN_DURATION;
-  unsigned long interval = 500;  // Reduced from 2000
-  int count = 0;
-  while(millis() - start < duration) {
-    display.clearDisplay();
-    if (count % 2 == 0) {
-      display.drawBitmap(6,10, logo_1, 117, 42, SSD1306_WHITE);
-    } else {
-      display.drawBitmap(6,10, logo_2, 117, 42, SSD1306_WHITE);
-    }
-    display.display();
-    delay(interval);
-    count++;
+  drawSplashFrame();
+  presentFrame();
+  while (millis() - start < SPLASH_SCREEN_DURATION) {
+    delay(160);
   }
-  
-  // Clear display and show initial state after splash
+
   display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.display();
-  delay(500);
-  
+  presentFrame();
+  delay(150);
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
   Serial.println("Splash screen complete");
+#endif
 }
 
 void setEditModeIndicator(bool enabled) {
   g_editModeIndicator = enabled;
 }
 
+void setInteractionState(char rawKey, JoystickDirection direction, bool modifierCHeld, bool joyBtnHeld) {
+  g_interactionState.rawKey = rawKey;
+  g_interactionState.joyDirection = direction;
+  g_interactionState.modifierCHeld = modifierCHeld;
+  g_interactionState.joyBtnHeld = joyBtnHeld;
+}
+
 void updateDisplay() {
-  // If screensaver is active, don't update normal display
-  if (screensaverActive) {
+  if (!displayReady || screensaverActive) {
     return;
   }
 
-  const String& displayName = getCurrentChordName();
-  
+  const UiSnapshot snapshot = buildSnapshot();
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
 
-  bool hasStatus = (g_statusMessage.length() > 0 && millis() < g_statusUntil);
-  
-  // Top line - left: scale info, right: mode badges
-  display.setTextSize(1);
-  
-  if (hasStatus) {
-    // Status message on the left
-    display.setCursor(0, 0);
-    display.print(g_statusMessage);
-  } else {
-    // Scale info on the left (abbreviated)
-    display.setCursor(0, 0);
-    display.print(getNoteName(getCurrentRootNote()));
-    display.print(" ");
-    display.print(getScaleAbbreviation(getCurrentScaleName()));
-  }
-  
-  // Mode indicators on the top right
-  int badgeX = SCREEN_WIDTH - 2; // Start from right edge with small margin
-  
-  if (isAutoVoicingMode()) {
-    // Draw "A" badge with circle (same style as Bass badge)
-    display.fillCircle(badgeX - 5, 6, 5, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(badgeX - 7, 3);
-    display.print("A");
-    display.setTextColor(SSD1306_WHITE); // Reset to white text
-    badgeX -= 14; // Move left for next badge
-  }
-  
-  if (isBassMode()) {
-    // Draw "B" badge with circle (aligned vertically with AV oval)
-    display.fillCircle(badgeX - 5, 6, 5, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(badgeX - 7, 3);
-    display.print("B");
-    display.setTextColor(SSD1306_WHITE); // Reset to white text
-    badgeX -= 14; // Move left for next badge
-  }
+  drawTopBar(snapshot);
+  drawHeroChord(snapshot);
+  drawActiveModes(snapshot);
+  drawFooter(snapshot);
 
-  if (isSingleNoteMode()) {
-    // Draw "N" badge with circle for single note mode.
-    display.fillCircle(badgeX - 5, 6, 5, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(badgeX - 7, 3);
-    display.print("N");
-    display.setTextColor(SSD1306_WHITE); // Reset to white text
-    badgeX -= 14; // Move left for next badge
-  }
-
-  if (isStrumMode()) {
-    // Draw "S" badge with circle for strum mode.
-    display.fillCircle(badgeX - 5, 6, 5, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(badgeX - 7, 3);
-    display.print("S");
-    display.setTextColor(SSD1306_WHITE); // Reset to white text
-    badgeX -= 14; // Move left for next badge
-  }
-
-  if (isChordLatchMode()) {
-    // Draw "L" badge with circle for latch mode.
-    display.fillCircle(badgeX - 5, 6, 5, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(badgeX - 7, 3);
-    display.print("L");
-    display.setTextColor(SSD1306_WHITE); // Reset to white text
-    badgeX -= 14; // Move left for next badge
-  }
-  
-  if (g_editModeIndicator) {
-    // Draw "E" badge with circle for Edit mode
-    display.fillCircle(badgeX - 5, 6, 5, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(badgeX - 7, 3);
-    display.print("E");
-    display.setTextColor(SSD1306_WHITE); // Reset to white text
-  }
-  
-  // Middle: chord name with slash notation (centered)
-  if (displayName.length() > 0) {
-    // Use smaller text if name is too long
-    if (displayName.length() > 9) {
-      display.setTextSize(1);
-      int16_t x1, y1;
-      uint16_t w, h;
-      display.getTextBounds(displayName, 0, 0, &x1, &y1, &w, &h);
-      int cursorX = (SCREEN_WIDTH - w) / 2;
-      display.setCursor(cursorX, 28);
-    } else {
-      display.setTextSize(2);
-      int16_t x1, y1;
-      uint16_t w, h;
-      display.getTextBounds(displayName, 0, 0, &x1, &y1, &w, &h);
-      int cursorX = (SCREEN_WIDTH - w) / 2;
-      display.setCursor(cursorX, 25);
-    }
-    display.print(displayName);
-  }
-  
-  // Show chord history (centered at the bottom)
-  int histCount = getChordHistoryCount();
-  if (histCount > 0) {
-    display.setTextSize(1);
-    
-    // Build history text in a fixed buffer to avoid per-frame String churn.
-    char historyStr[20];
-    int historyPos = 0;
-    historyStr[historyPos++] = '<';
-    historyStr[historyPos++] = ' ';
-    int toShow = min(5, histCount);
-    for (int i = 0; i < toShow; i++) {
-      if (i > 0 && historyPos < (int)sizeof(historyStr) - 1) {
-        historyStr[historyPos++] = '-';
-      }
-      int deg = getChordHistoryDegree(i);
-      if (deg >= 0 && deg <= 6 && historyPos < (int)sizeof(historyStr) - 1) {
-        historyStr[historyPos++] = (char)('1' + deg); // Display as 1-7 instead of 0-6
-      }
-    }
-    historyStr[historyPos] = '\0';
-    
-    // Center the history text
-    int16_t x1, y1;
-    uint16_t w, h;
-    display.getTextBounds(historyStr, 0, 0, &x1, &y1, &w, &h);
-    int cursorX = (SCREEN_WIDTH - w) / 2;
-    display.setCursor(cursorX, 56);
-    display.print(historyStr);
-  }
-  
-  display.display();
+  presentFrame();
 }
 
-void showStatus(String message, unsigned long durationMs) {
-  // Set timed message - it will be shown on the next updateDisplay() call
-  g_statusMessage = message;
-  g_statusUntil = millis() + durationMs;
+void showStatus(const char* message, unsigned long durationMs) {
+  parseStatusMessage(message ? message : "");
+  g_statusStart = millis();
+  g_statusDuration = durationMs;
+}
+
+void showStatusValue(const char* label, const char* value, unsigned long durationMs) {
+  char message[STATUS_TEXT_CAPACITY];
+  snprintf(message, sizeof(message), "%s: %s", label, value);
+  showStatus(message, durationMs);
+}
+
+void showStatusNumber(const char* label, int value, unsigned long durationMs) {
+  char number[12];
+  snprintf(number, sizeof(number), "%d", value);
+  showStatusValue(label, number, durationMs);
 }
 
 const char* getScaleAbbreviation(const char* fullName) {
-  if (fullName == nullptr) return "";
-  if (strcmp(fullName, "Ionian") == 0) return "Ion";
-  if (strcmp(fullName, "Dorian") == 0) return "Dor";
-  if (strcmp(fullName, "Phrygian") == 0) return "Phr";
-  if (strcmp(fullName, "Lydian") == 0) return "Lyd";
-  if (strcmp(fullName, "Mixolyd") == 0) return "Mix";
-  if (strcmp(fullName, "Aeolian") == 0) return "Aeo";
-  if (strcmp(fullName, "Locrian") == 0) return "Loc";
-  if (strcmp(fullName, "HarmMin") == 0) return "H.Min";
-  if (strcmp(fullName, "MelMin") == 0) return "M.Min";
+  if (fullName == nullptr) {
+    return "";
+  }
+  if (strcmp(fullName, "Ionian") == 0) {
+    return "ION";
+  }
+  if (strcmp(fullName, "Dorian") == 0) {
+    return "DOR";
+  }
+  if (strcmp(fullName, "Phrygian") == 0) {
+    return "PHR";
+  }
+  if (strcmp(fullName, "Lydian") == 0) {
+    return "LYD";
+  }
+  if (strcmp(fullName, "Mixolyd") == 0) {
+    return "MIX";
+  }
+  if (strcmp(fullName, "Aeolian") == 0) {
+    return "AEO";
+  }
+  if (strcmp(fullName, "Locrian") == 0) {
+    return "LOC";
+  }
+  if (strcmp(fullName, "HarmMin") == 0) {
+    return "HMIN";
+  }
+  if (strcmp(fullName, "MelMin") == 0) {
+    return "MMIN";
+  }
   return fullName;
 }
 
-const char* getNoteName(int noteNumber) {
-  const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-  return noteNames[noteNumber % 12];
-}
-
-void drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h) {
+void drawBitmap(int16_t x, int16_t y, const uint8_t* bitmap, int16_t w, int16_t h) {
   display.drawBitmap(x, y, bitmap, w, h, SSD1306_WHITE);
 }

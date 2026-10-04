@@ -3,6 +3,7 @@
 #include "Display.h"
 #include "ChordEngine.h"
 #include "JoystickDirection.h"
+#include "DebouncedInput.h"
 
 // Matrix is wired column-to-row (columns are inputs, rows are outputs)
 // Keys mapping restored to the original working layout
@@ -18,14 +19,18 @@ char keys[ROWS][COLS] = {
   {'A', 'B', 'C', NO_KEY}       // Row 2 (GP0)
 };
 
-int rowPins[ROWS] = {2, 1, 0};      // OUTPUT (scan side) - SWAPPED
-int colPins[COLS] = {3, 4, 5, 6};   // INPUT_PULLUP (read side) - SWAPPED
+const int rowPins[ROWS] = KEYPAD_ROW_PINS;
+const int colPins[COLS] = KEYPAD_COL_PINS;
+static DebouncedInput keyInputs[10];
+static DebouncedInput joyButton;
+static uint16_t stableKeys = 0;
+static JoystickDirection sensedDirection = JoystickDirection::Center;
 
-// Track last key state for edge detection
-static char lastKey = NO_KEY;
-static char lastReportedKey = NO_KEY;
-static unsigned long lastDebounceTime = 0;
-static const unsigned long debounceDelay = 10;
+static int keyIndex(char key) {
+  if (key >= '0' && key <= '6') return key - '0';
+  if (key >= 'A' && key <= 'C') return 7 + key - 'A';
+  return -1;
+}
 
 static unsigned long lastJoystickMoveTime = 0;
 // Track last joystick direction at file scope so we can prime it externally
@@ -70,6 +75,7 @@ static constexpr JoystickClassifierConfig kJoystickConfig = {
 struct MatrixScanResult {
   char firstKey;
   bool modifierCHeld;
+  uint16_t heldKeys;
 };
 
 // Helper to determine if the joystick button is currently held considering polarity
@@ -85,21 +91,24 @@ static inline bool isJoyButtonHeld() {
 // Custom keypad scanner - SWAPPED: scan rows, read columns.
 // Returns both first detected key (for event flow) and C-modifier state.
 static MatrixScanResult scanMatrixState() {
-  MatrixScanResult result = {NO_KEY, false};
+  MatrixScanResult result = {NO_KEY, false, 0};
 
   // Ensure all rows are inactive before scanning
   for (int rr = 0; rr < ROWS; rr++) {
-    digitalWrite(rowPins[rr], HIGH);
+    pinMode(rowPins[rr], INPUT);
   }
   // Scan through each row (set LOW to activate)
   for (int r = 0; r < ROWS; r++) {
     digitalWrite(rowPins[r], LOW);
-    delayMicroseconds(50);
+    pinMode(rowPins[r], OUTPUT);
+    delayMicroseconds(MATRIX_SETTLE_US);
     
     // Check each column (read for LOW = pressed)
     for (int c = 0; c < COLS; c++) {
       if (digitalRead(colPins[c]) == LOW) {
         const char foundKey = keys[r][c];
+        const int index = keyIndex(foundKey);
+        if (index >= 0) result.heldKeys |= uint16_t(1u << index);
         if (foundKey == 'C') {
           result.modifierCHeld = true;
         }
@@ -108,40 +117,30 @@ static MatrixScanResult scanMatrixState() {
         }
       }
     }
-    digitalWrite(rowPins[r], HIGH);
+    pinMode(rowPins[r], INPUT);
   }
   return result;
 }
 
-static char debounceKey(char key) {
-  // Debounce: only update when key changes
-  if (key != lastKey) {
-    lastDebounceTime = millis();
-    lastKey = key;
-    lastReportedKey = NO_KEY; // Reset so we can report the new key
+static char debounceKeys(uint16_t mask) {
+  char pressed = NO_KEY;
+  const uint32_t now = millis();
+  stableKeys = 0;
+  for (int i = 0; i < 10; ++i) {
+    const bool changed = keyInputs[i].update((mask & (1u << i)) != 0, now, INPUT_DEBOUNCE_MS);
+    if (keyInputs[i].held()) {
+      stableKeys |= uint16_t(1u << i);
+      // One musical action per scan; simultaneous presses use matrix-independent
+      // priority (lowest degree first), while all releases remain independent.
+      if (changed && pressed == NO_KEY && i != 9)
+        pressed = i < 7 ? char('0' + i) : char('A' + i - 7);
+    }
   }
-
-  // Report key if it's been stable for debounce period and we haven't reported it yet
-  if ((millis() - lastDebounceTime) > debounceDelay && key != NO_KEY && key != lastReportedKey) {
-#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
-    Serial.print("Key: ");
-    Serial.println(key);
-#endif
-    lastReportedKey = key;
-    return key;
-  }
-
-  // Clear reported key when released
-  if (key == NO_KEY) {
-    lastReportedKey = NO_KEY;
-  }
-
-  return NO_KEY;
+  return pressed;
 }
 
 char getKey() {
-  const MatrixScanResult state = scanMatrixState();
-  return debounceKey(state.firstKey);
+  return debounceKeys(scanMatrixState().heldKeys);
 }
 
 // Immediate, no-debounce read of the matrix
@@ -156,11 +155,12 @@ void debugScanPressedKeys(char* out, int maxLen) {
   int pos = 0;
   // Ensure all rows inactive
   for (int rr = 0; rr < ROWS; rr++) {
-    digitalWrite(rowPins[rr], HIGH);
+    pinMode(rowPins[rr], INPUT);
   }
   for (int r = 0; r < ROWS; r++) {
     digitalWrite(rowPins[r], LOW);
-    delayMicroseconds(50);
+    pinMode(rowPins[r], OUTPUT);
+    delayMicroseconds(MATRIX_SETTLE_US);
     for (int c = 0; c < COLS; c++) {
       if (digitalRead(colPins[c]) == LOW) {
         char k = keys[r][c];
@@ -170,7 +170,7 @@ void debugScanPressedKeys(char* out, int maxLen) {
         }
       }
     }
-    digitalWrite(rowPins[r], HIGH);
+    pinMode(rowPins[r], INPUT);
   }
   if (pos > 0 && pos < maxLen) {
     // Replace trailing space with terminator
@@ -200,49 +200,26 @@ void pollControls(ControlSnapshot& out) {
 #endif
 
   out.rawKey = state.firstKey;
-  out.debouncedKey = debounceKey(out.rawKey);
-  out.modifierCHeld = state.modifierCHeld;
+  out.debouncedKey = debounceKeys(state.heldKeys);
+  out.heldKeys = stableKeys;
+  out.modifierCHeld = (stableKeys & (1u << 9)) != 0;
   out.joyX = logicalX;
   out.joyY = logicalY;
-  out.joyBtnHeld = isJoyButtonHeld();
-  out.joyDirectionInstant = classifyJoystickDirectionInstantWithConfig(out.joyX, out.joyY, kJoystickConfig);
+  joyButton.update(isJoyButtonHeld(), millis(), INPUT_DEBOUNCE_MS);
+  out.joyBtnHeld = joyButton.held();
+  sensedDirection = classifyJoystickDirectionLatchedWithConfig(out.joyX, out.joyY, sensedDirection, kJoystickConfig);
+  out.joyDirection = sensedDirection;
 }
 
 void setupControls() {
-  Serial.println("Setting up controls...");
-  Serial.println("SWAPPED WIRING: Rows=OUTPUT(scan), Cols=INPUT_PULLUP(read)");
   pinMode(JOYSTICK_BTN, INPUT_PULLUP);
-  
-  // Setup keypad matrix pins - SWAPPED from typical
-  // Rows are OUTPUT (scan side)
-  for (int r = 0; r < ROWS; r++) {
-    pinMode(rowPins[r], OUTPUT);
-    digitalWrite(rowPins[r], HIGH);
-    Serial.print("Row pin ");
-    Serial.print(rowPins[r]);
-    Serial.println(" set to OUTPUT HIGH");
-  }
-  
-  // Columns are INPUT_PULLUP (read side)
-  for (int c = 0; c < COLS; c++) {
-    pinMode(colPins[c], INPUT_PULLUP);
-    Serial.print("Col pin ");
-    Serial.print(colPins[c]);
-    Serial.print(" set to INPUT_PULLUP, current state: ");
-    Serial.println(digitalRead(colPins[c]) ? "HIGH" : "LOW");
-  }
-  
-  // Test scan immediately after setup
-  Serial.println("Testing immediate scan...");
-  const char testKey = scanMatrixState().firstKey;
-  if (testKey != NO_KEY) {
-    Serial.print("Key detected during setup: ");
-    Serial.println(testKey);
-  } else {
-    Serial.println("No key pressed during setup");
-  }
-  
+  analogReadResolution(10);
+  // Inactive rows float: two keys in a column must never short HIGH to LOW.
+  for (int r = 0; r < ROWS; ++r) pinMode(rowPins[r], INPUT);
+  for (int c = 0; c < COLS; ++c) pinMode(colPins[c], INPUT_PULLUP);
+#if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_INFO
   Serial.println("Controls setup complete");
+#endif
 }
 
 void handleKeyPress(char key) {
@@ -253,11 +230,11 @@ void handleKeyPress(char key) {
   else if (key == 'A') {
     int newRoot = (getCurrentRootNote() + 1);
     setCurrentRootNote(newRoot);
-    showStatus(String("Root: ") + getNoteName(getCurrentRootNote()), 300);
+    showStatusValue("Root", getNoteName(getCurrentRootNote()), 300);
   }
   else if (key == 'B') {
     cycleScaleType(1);
-    showStatus(String("Scale: ") + getCurrentScaleName(), 600);
+    showStatusValue("Scale", getCurrentScaleName(), 600);
   }
   // Button C itself doesn't do anything when pressed alone - only used as modifier
 }
@@ -404,7 +381,7 @@ static void applyChordVariation(JoystickDirection direction) {
   }
 }
 
-void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
+void handleJoystick(JoystickDirection direction, bool cHeld, bool held, char rawKey) {
   bool &lastBtnHeld = g_lastBtnHeld;
   unsigned long &lastIgnoreLog = g_lastIgnoreLog;
   static unsigned long btnPressStartTime = 0;
@@ -425,33 +402,35 @@ void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
       
       // Short press with C + A held toggles strum mode.
       // Short press with only C held toggles bass mode.
-      if (!longPressHandled && pressDuration < 500 && cHeldAtPress && keyAtPress == 'A') {
+      if (!longPressHandled && pressDuration < JOYSTICK_SHORT_PRESS_MS && cHeldAtPress && keyAtPress == 'A') {
         toggleStrumMode();
-        showStatus(String("Strum: ") + (isStrumMode() ? "ON" : "OFF"), 600);
-      } else if (!longPressHandled && pressDuration < 500 && cHeldAtPress) {
+        showStatusValue("Strum", (isStrumMode() ? "ON" : "OFF"), 600);
+      } else if (!longPressHandled && pressDuration < JOYSTICK_SHORT_PRESS_MS && cHeldAtPress) {
         toggleBassMode();
-        showStatus(String("Bass: ") + (isBassMode() ? "ON" : "OFF"), 500);
+        showStatusValue("Bass", (isBassMode() ? "ON" : "OFF"), 500);
+      } else if (!longPressHandled && pressDuration < JOYSTICK_SHORT_PRESS_MS && !cHeldAtPress) {
+        stopCurrentChord();
+        showStatus("STOP", STATUS_MESSAGE_DURATION);
       }
     }
     lastBtnHeld = held;
   }
   
   // Check for long press while held - only if C was held at press time
-  if (held && !longPressHandled && cHeldAtPress && (millis() - btnPressStartTime > 1000)) {
+  if (held && !longPressHandled && cHeldAtPress && (millis() - btnPressStartTime >= JOYSTICK_LONG_PRESS_MS)) {
     // Long press with C held - toggle smart voicing.
     toggleAutoVoicingMode();
-    showStatus(String("SmartVoice: ") + (isAutoVoicingMode() ? "ON" : "OFF"), 800);
+    showStatusValue("SmartVoice", (isAutoVoicingMode() ? "ON" : "OFF"), 800);
     longPressHandled = true;
   }
 
   // Long press without C held toggles single note mode.
-  if (held && !longPressHandled && !cHeldAtPress && (millis() - btnPressStartTime > 1000)) {
+  if (held && !longPressHandled && !cHeldAtPress && (millis() - btnPressStartTime >= JOYSTICK_LONG_PRESS_MS)) {
     toggleSingleNoteMode();
-    showStatus(String("Note: ") + (isSingleNoteMode() ? "ON" : "OFF"), 800);
+    showStatusValue("Note", (isSingleNoteMode() ? "ON" : "OFF"), 800);
     longPressHandled = true;
   }
 
-  JoystickDirection direction = classifyJoystickDirectionLatchedWithConfig(x, y, g_lastDirection, kJoystickConfig);
 
   // Track octave change state (left/right only).
   static JoystickDirection lastOctaveDirection = JoystickDirection::Center;
@@ -469,10 +448,10 @@ void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
     if (direction != lastOctaveDirection && (millis() - lastOctaveChangeTime >= JOYSTICK_GRACE_PERIOD)) {
       if (direction == JoystickDirection::Right) {
         incrementOctave();
-        showStatus(String("Octave: ") + getOctaveOffset(), 600);
+        showStatusNumber("Octave", getOctaveOffset(), 600);
       } else if (direction == JoystickDirection::Left) {
         decrementOctave();
-        showStatus(String("Octave: ") + getOctaveOffset(), 600);
+        showStatusNumber("Octave", getOctaveOffset(), 600);
       }
       lastOctaveDirection = direction;
       lastOctaveChangeTime = millis();
@@ -498,7 +477,7 @@ void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
   if (cHeld && direction == JoystickDirection::Down) {
     if (direction != lastModeDirection && (millis() - lastModeChangeTime >= JOYSTICK_GRACE_PERIOD)) {
       cycleJoystickChordMode();
-      showStatus(String("Joy: ") + joystickModeName(g_joystickChordMode), 700);
+      showStatusValue("Joy", joystickModeName(g_joystickChordMode), 700);
       lastModeDirection = direction;
       lastModeChangeTime = millis();
       updateJoystickState();
@@ -512,6 +491,11 @@ void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
     lastModeDirection = JoystickDirection::Center;
   }
 
+  if (cHeld) {
+    updateJoystickState();
+    return;
+  }
+
   // Chromatic mode bonus: when no chord is held, left/right shifts key by semitone.
   static JoystickDirection lastChromaticDirection = JoystickDirection::Center;
   static unsigned long lastChromaticShiftTime = 0;
@@ -519,7 +503,7 @@ void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
     if (direction != lastChromaticDirection && (millis() - lastChromaticShiftTime >= JOYSTICK_GRACE_PERIOD)) {
       int step = (direction == JoystickDirection::Right) ? 1 : -1;
       setCurrentRootNote(getCurrentRootNote() + step);
-      showStatus(String("Root: ") + getNoteName(getCurrentRootNote()), 500);
+      showStatusValue("Root", getNoteName(getCurrentRootNote()), 500);
       lastChromaticDirection = direction;
       lastChromaticShiftTime = millis();
       updateJoystickState();
@@ -552,7 +536,7 @@ void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
 
   if (firstNonZero || (millis() - lastJoystickMoveTime >= JOYSTICK_GRACE_PERIOD)) {
     if (!isChordActive()) {
-      if (millis() - lastIgnoreLog > 1000) {
+      if (millis() - lastIgnoreLog >= JOYSTICK_LONG_PRESS_MS) {
 #if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
         Serial.println("Joystick variation ignored (no chord active)");
 #endif
@@ -563,9 +547,7 @@ void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
     }
 
 #if CHOCO_LOG_LEVEL >= CHOCO_LOG_LEVEL_DEBUG
-    Serial.print("Joystick raw x="); Serial.print(x);
-    Serial.print(" y="); Serial.print(y);
-    Serial.print(" -> direction="); Serial.println((int)direction);
+    Serial.print("Joystick direction="); Serial.println((int)direction);
 #endif
 
     applyChordVariation(direction);
@@ -576,4 +558,8 @@ void handleJoystick(int x, int y, bool cHeld, bool held, char rawKey) {
 void primeJoystickDirection(JoystickDirection direction) {
   g_lastDirection = direction;
   lastJoystickMoveTime = millis();
+}
+
+const char* getJoystickChordModeName() {
+  return joystickModeName(g_joystickChordMode);
 }

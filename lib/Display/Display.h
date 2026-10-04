@@ -4,13 +4,16 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "Config.h"
+#include "JoystickTypes.h"
 
 void setupDisplay();
 void drawSplashScreen();
 void updateDisplay();
 void setEditModeIndicator(bool enabled);
-void showStatus(String message, unsigned long durationMs = STATUS_MESSAGE_DURATION);
-const char* getNoteName(int noteNumber);
+void setInteractionState(char rawKey, JoystickDirection direction, bool modifierCHeld, bool joyBtnHeld);
+void showStatus(const char* message, unsigned long durationMs = STATUS_MESSAGE_DURATION);
+void showStatusValue(const char* label, const char* value, unsigned long durationMs);
+void showStatusNumber(const char* label, int value, unsigned long durationMs);
 void drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h);
 const char* getScaleAbbreviation(const char* fullName);
 

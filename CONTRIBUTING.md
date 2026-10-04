@@ -15,10 +15,10 @@ firmware stack, so clear communication and small, focused changes help a lot.
 
 ## Tests
 
-The CI runs two fast host-side logic tests and a full firmware build.
+The CI runs six host test programs and a full firmware build.
 
-- Fast logic tests: see `.github/workflows/build.yml` for the exact compiler
-  commands used in CI.
+- Host tests: `bash test/run_host_tests.sh` (Linux/macOS/WSL, native `g++`).
+  The script also runs the main loop with simulated GPIO, clock and MIDI.
 - Firmware build: `pio run`
 
 If you cannot run the tests locally, please mention that in your PR.

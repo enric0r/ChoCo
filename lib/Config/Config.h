@@ -12,6 +12,18 @@
 // Keypad configuration
 #define ROWS 3
 #define COLS 4
+#define KEYPAD_ROW_PINS {2, 1, 0}
+#define KEYPAD_COL_PINS {3, 4, 5, 6}
+#define INPUT_DEBOUNCE_MS 10
+#define MATRIX_SETTLE_US 50
+#define JOYSTICK_SHORT_PRESS_MS 500
+#define JOYSTICK_LONG_PRESS_MS 1000
+#define JOYSTICK_ACTIVITY_DELTA 50
+#define UI_REFRESH_MS 100
+#define CHORD_HISTORY_SIZE 6
+#define CHORD_SUGGESTION_SIZE 4
+#define CHORD_NAME_CAPACITY 32
+#define STATUS_TEXT_CAPACITY 32
 
 // Joystick pins
 #define JOYSTICK_X A0
@@ -171,6 +183,11 @@
 
 extern const int MAJOR_SCALE[];
 extern const int MINOR_SCALE[];
+
+inline const char* getNoteName(int noteNumber) {
+  static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+  return names[(noteNumber % 12 + 12) % 12];
+}
 
 // Logging controls
 #define CHOCO_LOG_LEVEL_NONE 0
