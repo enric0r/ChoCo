@@ -5,26 +5,17 @@
 
 #define NO_KEY '\0'
 
-enum class JoystickDirection : uint8_t {
-  Center = 0,
-  Up,
-  UpRight,
-  Right,
-  DownRight,
-  Down,
-  DownLeft,
-  Left,
-  UpLeft
-};
+#include "../Config/JoystickTypes.h"
 
 struct ControlSnapshot {
   char debouncedKey;
   char rawKey;
+  uint16_t heldKeys; // debounced bits: degrees 0..6, A=7, B=8, C=9
   bool modifierCHeld;
   int joyX;
   int joyY;
   bool joyBtnHeld;
-  JoystickDirection joyDirectionInstant;
+  JoystickDirection joyDirection;
 };
 
 char getKey();
@@ -44,7 +35,8 @@ JoystickDirection classifyJoystickDirectionInstant(int x, int y);
 bool getChordVariationForDirection(JoystickDirection direction, int degree, const int*& intervals, int& size, const char*& name);
 void setupControls();
 void handleKeyPress(char key);
-void handleJoystick(int x, int y, bool modifierCHeld, bool joyBtnHeld, char rawKey);
+void handleJoystick(JoystickDirection direction, bool modifierCHeld, bool joyBtnHeld, char rawKey);
+const char* getJoystickChordModeName();
 
 // Seed the joystick direction state to avoid immediate re-application
 // of the same variation right after starting a chord with a held joystick.

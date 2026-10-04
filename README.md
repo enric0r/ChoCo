@@ -51,7 +51,8 @@ The two upper rows sit halfway between the four white keys. Labels below follow 
 | `C` | Hold as a modifier for shortcuts |
 | Joystick tilt, with a degree held | Change the chord variation |
 | `C` + `0–6` | Cycle the inversion for that degree |
-| `C` + `A` | Toggle chord latch |
+| `C` + `A` | Toggle chord latch when A is released; cancelled if the joystick button is used for strum |
+| Joystick short press, without `C` | Stop the chord and cancel pending strum notes, keeping the selected modes |
 | Joystick long press, without `C` | Toggle single-note mode |
 
 The [illustrated control map](https://enric0r.github.io/choco.github.io/docs/#controls) covers bass, strum, octave changes and the other shortcuts. See [chord variations](https://enric0r.github.io/choco.github.io/docs/#shape-a-chord) for the three joystick maps and [modes and display](https://enric0r.github.io/choco.github.io/docs/#modes-and-display) for the OLED guide.
@@ -110,9 +111,38 @@ Pin assignments, joystick orientation and thresholds, display timings, logging a
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing the firmware. Keep the main loop responsive and put hardware settings in `Config.h`.
 
+<details>
+<summary>OLED and input implementation notes</summary>
+
+### OLED layout
+
+The header shows the selected key/scale and active degree (`D1..D7`), or `EDIT`
+while C is held. The chord is centered at the largest size that fits. The arrow
+tracks joystick direction with the horizontal mirror removed; the existing
+vertical mapping is preserved for the mounted device.
+
+Active modes appear as a compact text line: `VOI` (smart voicing), `BAS` (bass),
+`NOTE` (single note), `STR` (strum), `LAT` (latch). The footer normally shows
+`NEXT` suggestions. Temporary confirmations replace only the footer so the
+chord stays readable. Long text is fitted or explicitly truncated.
+
+### Responsiveness and feedback
+
+- Each key and the joystick button use a 10 ms stable-edge debounce, including releases. A newly pressed degree takes over from a held degree; releasing it stops playback unless latch is enabled. Previously held degrees do not retrigger automatically. Exactly simultaneous presses select the lowest degree.
+- Strum note-ons are scheduled without blocking input, and pending notes are cancelled on release or chord replacement. Smart voicing preserves only notes that have actually started.
+- OLED updates remain limited to 100 ms, skip unchanged frames, and wait for pending strum notes. The first key press wakes the screen and performs its action. Sounding chords keep the screen awake.
+- Joystick feedback and new chord attacks share the same hysteresis state, so a variation remains selected until the stick crosses the release threshold. Degree release is processed before joystick changes to prevent a brief extra chord on release.
+- Chord names use the lowest note of the resulting voicing for slash notation, including the optional bass pedal. Bass toggles apply immediately; other voicing settings apply when the next chord is generated. The top bar shows the selected key/scale, while the main name describes the active chord.
+- Display degrees `1..7` correspond to physical keys `0..6`. `NEXT` contains harmonic suggestions, not a prediction or a correctness score.
+- Chord names, history and status messages use fixed buffers. Release builds keep serial output disabled; `C+B` reports this on screen unless INFO logging is enabled.
+
+These are software guarantees covered where possible by host tests. End-to-end latency, matrix ghosting with multiple keys, OLED appearance and USB behaviour still require testing on the physical board and MIDI host.
+
+</details>
+
 ### Testing
 
-CI compiles the host logic tests and builds the firmware with `pio run`. Host tests need a native C++17 compiler; `pio test` is not configured.
+CI runs six host test programs and builds the firmware with `pio run`. Host tests need a native C++17 compiler; `pio test` is not configured.
 
 <details>
 <summary>Run the host logic tests with PowerShell</summary>
@@ -130,6 +160,15 @@ g++ -std=c++17 -Wall -Wextra -pedantic -Ilib/Controls test/logic/test_joystick_d
 </details>
 
 USB delivery, joystick behavior and the OLED also need checks on a real controller and MIDI host. Follow the hardware checks in [DEBUGGING.md](DEBUGGING.md).
+
+Run the complete suite on Linux, macOS or WSL with a native C++ compiler:
+
+```bash
+bash test/run_host_tests.sh
+```
+
+On Windows with Ubuntu installed in WSL: `wsl -d Ubuntu -- bash test/run_host_tests.sh`.
+The suite covers degree bounds, scale wrapping, inversions, joystick classification, contact bounce, timer rollover, cancellable strum, overlapping keys, latch/strum shortcuts, bass ownership and chord labels. The integration test runs the actual main loop, controls and chord engine with simulated GPIO, time and MIDI. It does not emulate USB or OLED hardware. A cross-compiler such as `arm-none-eabi-g++` cannot run these host tests.
 
 ## Help and documentation
 

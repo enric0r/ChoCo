@@ -9,7 +9,7 @@ struct Chord {
   int notes[5];
   int size;
   int root; // MIDI note of the chord root used when the chord was started (pre-inversion)
-  String name;
+  char name[CHORD_NAME_CAPACITY];
 };
 
 // Supported 7-note scales (modes and common minors)
@@ -46,7 +46,9 @@ void playChord(int root, const int* intervals, int size, const char* name);
 // Applies stored inversion/auto-voicing like playChordForDegree.
 void playChordForDegreeWithIntervals(int degree, const int* intervals, int size, const char* name);
 void stopCurrentChord();
-const String& getCurrentChordName();
+const char* getCurrentChordName();
+void updateChordPlayback();
+bool isChordPlaybackPending();
 int getCurrentRootNote();
 void setCurrentRootNote(int rootNote);
 // Scale selection
@@ -105,8 +107,12 @@ void decrementOctave();
 // Chord history functions
 void printChordHistory();
 int getChordHistoryCount();
-String getChordHistoryEntry(int index); // 0 = most recent
+const char* getChordHistoryEntry(int index); // 0 = most recent
 int getChordHistoryDegree(int index);   // Get degree number for display (0-6, or -1 if unknown)
+
+// Chord suggestion functions
+int getChordSuggestionCount();
+int getChordSuggestionDegree(int index); // 0 = strongest suggestion
 
 extern const int CHORD_MAJ[];
 extern const int CHORD_MIN[];
