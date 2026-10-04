@@ -95,6 +95,28 @@ The prototype uses a Raspberry Pi Pico, ten keys wired as a 3×4 matrix, an anal
 
 The [hardware directory](hardware/) contains the [schematic](hardware/ChoCo.kicad_sch), [PCB layout](hardware/ChoCo.kicad_pcb), [KiCad project](hardware/ChoCo.kicad_pro) and [REV-02 archive](hardware/ChoCo_REV-02.zip).
 
+### Prototype bill of materials
+
+For one ChoCo, the project files describe the parts below. This is a record of
+the prototype design; exact purchased models and suppliers are still being
+confirmed. See the [detailed BOM and assembly notes](hardware/BOM.md).
+
+| Qty | Part | Project detail |
+| --- | --- | --- |
+| 1 | ChoCo PCB | Prototype marked REV-02 |
+| 1 | Raspberry Pi Pico | RP2040 module, `A1` |
+| 1 | 128×64 I²C OLED | SSD1306-compatible firmware; `J1` |
+| 1 | Two-axis analog joystick with push switch | PS4-style footprint; exact model to confirm |
+| 10 | Mechanical key switches | MX-style 1u PCB footprints; `S1–S10` |
+| 10 | Matrix diodes | Axial DO-35 footprints; `D1–D10`; symbol describes the 1N4148 family |
+| 10 | Keycaps | Visible in the prototype; exact model to confirm |
+| 1 | Enclosure / base assembly | Visible in the prototype; fabrication details to confirm |
+| 1 | USB data cable | Match the connector on the installed Pico |
+
+Headers, sockets and mounting hardware depend on the actual assembly; they are
+listed separately in the detailed BOM so they are not mistaken for additional
+schematic components.
+
 Pin assignments, joystick orientation and thresholds, display timings, logging and mode defaults live in [lib/Config/Config.h](lib/Config/Config.h). The [hardware guide](https://enric0r.github.io/choco.github.io/docs/#hardware) and [configuration reference](https://enric0r.github.io/choco.github.io/docs/#configuration) explain these settings.
 
 ## Developing the firmware
