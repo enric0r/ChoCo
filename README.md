@@ -19,7 +19,7 @@ Choose a scale, hold a degree key, and move the joystick to change the chord. Ch
 - **Inversions and voicing.** Store an inversion for each degree or enable smart voicing.
 - **Feedback on the device.** The 128×64 OLED shows key, scale, chord, mode badges and harmonic suggestions.
 
-ChoCo sends class-compliant USB MIDI through TinyUSB. This repository contains the firmware and KiCad hardware files.
+ChoCo sends class-compliant USB MIDI through TinyUSB. This repository contains the firmware, KiCad hardware files and [STL files for the case](hardware/case/).
 
 ## Play your first chord
 
@@ -94,6 +94,16 @@ The prototype uses a Raspberry Pi Pico, ten keys wired as a 3×4 matrix, an anal
 | OLED SDA / SCL | GP14 / GP15, on `Wire1` |
 
 The [hardware directory](hardware/) contains the [schematic](hardware/ChoCo.kicad_sch), [PCB layout](hardware/ChoCo.kicad_pcb), [KiCad project](hardware/ChoCo.kicad_pro) and [REV-02 archive](hardware/ChoCo_REV-02.zip).
+
+### 3D-printed case
+
+The [case files and printing notes](hardware/case/) include three separate STL models exported from the Fusion 360 design:
+
+- [Top frame](hardware/case/ChoCo-top.stl)
+- [Chocolate-bar bottom](hardware/case/ChoCo-bar-bottom.stl)
+- [Joystick cap](hardware/case/ChoCo-thumbstick.stl)
+
+Import the files in millimeters at 100% scale. Each file contains one part; no slicer profile is included yet.
 
 ### Prototype bill of materials
 
