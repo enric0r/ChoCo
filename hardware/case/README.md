@@ -16,7 +16,7 @@ Download one copy of each part. On a GitHub STL page, use **Download raw file** 
 
 STL does not encode units. Import these files as **millimeters**, at **100% scale**, and check the dimensions above in your slicer.
 
-Each file contains one connected mesh. The parts have been separated from the multi-body exports and translated to center X/Y with the lowest point at Z=0. Their shape, scale and orientation are preserved. This origin placement does not specify the best printing orientation.
+Each file contains one connected mesh, exported separately from Fusion 360. The files keep their original design coordinates, so move or arrange each part on the build plate in your slicer before printing. Their coordinates do not specify the best printing orientation.
 
 ## Printing and assembly
 
